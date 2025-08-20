@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import LottieView from "lottie-react-native";
 
 // ---------- Types ----------
 type Product = {
@@ -25,7 +26,7 @@ type Product = {
   price?: number;
   imageUrl?: string;
   size?: string;
-  average_price?: number; 
+  average_price?: number;
 };
 
 // ---------- UI Helpers ----------
@@ -39,6 +40,7 @@ function normalizeText(v: string) {
 export default function ProductsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setRefreshing] = useState(false);
+  const [showRefreshLottie, setShowRefreshLottie] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<Product[]>([]);
   const [query, setQuery] = useState("");
@@ -63,11 +65,12 @@ export default function ProductsPage() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    try {
-      await load();
-    } finally {
+    setShowRefreshLottie(true);
+    await load();
+    setTimeout(() => {
+      setShowRefreshLottie(false);
       setRefreshing(false);
-    }
+    }, 2000);
   }, [load]);
 
   useEffect(() => {
@@ -90,17 +93,22 @@ export default function ProductsPage() {
   const showSnack = useCallback((msg: string) => {
     setSnack(msg);
     if (snackTimer.current) clearTimeout(snackTimer.current);
-    snackTimer.current = setTimeout(() => setSnack(null), 2200) as unknown as NodeJS.Timeout; 
+    snackTimer.current = setTimeout(() => setSnack(null), 2200) as unknown as NodeJS.Timeout;
   }, []);
 
   // ---------- Render states ----------
-  if (isLoading) {
+  if (isLoading || (isRefreshing && showRefreshLottie)) {
     return (
       <SafeAreaView style={styles.screen}>
         <View style={styles.header}>
           <View style={styles.titleContainer}>
             <Text style={styles.title}>מוצרים</Text>
-            <Text style={styles.titleEmoji}>📦</Text>
+            <LottieView
+                                  source={require('../../assets/BarcodeScanner.json')}
+                                  autoPlay
+                                  loop
+                                  style={{ width: 32, height: 32 }}
+                                />
           </View>
           <TextInput
             value={query}
@@ -113,11 +121,13 @@ export default function ProductsPage() {
           />
         </View>
         <View style={styles.loadingWrap}>
-          <ActivityIndicator size="large" color="#506c4fff" />
+          <LottieView
+            source={require('../../assets/raise-animation.json')}
+            autoPlay
+            loop={true}
+            style={{ width: 300, height: 300 }}
+          />
           <Text style={styles.loadingText}>טוען מוצרים…</Text>
-          <View style={styles.skeletonCard} />
-          <View style={styles.skeletonCard} />
-          <View style={styles.skeletonCard} />
         </View>
       </SafeAreaView>
     );
@@ -129,7 +139,12 @@ export default function ProductsPage() {
         <View style={styles.header}>
           <View style={styles.titleContainer}>
             <Text style={styles.title}>מוצרים</Text>
-            <Text style={styles.titleEmoji}>📦</Text>
+            <LottieView
+              source={require('../../assets/BarcodeScanner.json')}
+              autoPlay
+              loop
+              style={{ width: 32, height: 32 }}
+            />
           </View>
         </View>
         <View style={styles.center}>
@@ -151,7 +166,12 @@ export default function ProductsPage() {
       <View style={styles.header}>
         <View style={styles.titleContainer}>
           <Text style={styles.title}>מוצרים</Text>
-          <Text style={styles.titleEmoji}>📦</Text>
+           <LottieView
+                                  source={require('../../assets/BarcodeScanner.json')}
+                                  autoPlay
+                                  loop
+                                  style={{ width: 36, height: 36 }}
+                                />
         </View>
         <TextInput
           value={query}
@@ -170,7 +190,7 @@ export default function ProductsPage() {
         data={filtered}
         keyExtractor={(item, i) => `${item.id ?? item.barcode ?? i}`}
         refreshControl={
-          <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor="#506c4fff" />
+          <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor="transparent" />
         }
         ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
         renderItem={({ item }) => <ProductCard product={item} onToast={showSnack} />}
@@ -195,7 +215,7 @@ export default function ProductsPage() {
 
 // ---------- Product Card Component with Navigation ----------
 function ProductCard({ product, onToast }: { product: Product; onToast: (m: string) => void }) {
-  const router = useRouter(); 
+  const router = useRouter();
   const name = product.name ?? "מוצר ללא שם";
   const brand = product.brand ?? "";
   const code = product.barcode ?? "";
@@ -205,7 +225,7 @@ function ProductCard({ product, onToast }: { product: Product; onToast: (m: stri
 
   const handlePress = () => {
     router.push({
-      pathname: "/product-stats", 
+      pathname: "/product-stats",
       params: { barcode: product.barcode },
     });
     onToast(`נבחר: ${name}${code ? ` • ${code}` : ""}`);
@@ -262,7 +282,7 @@ const styles = StyleSheet.create({
     gap: 8, // Gap between title and icon
   },
   title: {
-    fontSize: 32, // Increased font size
+    fontSize: 36, // Increased font size
     fontWeight: "700",
     color: "#506c4fff",
     textAlign: 'right', // Aligned to top right
@@ -342,7 +362,7 @@ const styles = StyleSheet.create({
     color: "#666",
     textAlign: 'center',
   },
- card: {
+  card: {
     backgroundColor: "#fffdefff",
     borderRadius: 5,
     padding: 16,

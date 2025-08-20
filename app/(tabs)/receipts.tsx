@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import {
   ActivityIndicator,
   I18nManager,
@@ -17,6 +17,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
+import LottieView from 'lottie-react-native';
 
 // ---- Types ---------------------------------------------------------------
 type Receipt = {
@@ -82,11 +83,13 @@ function groupByCompanyCity(receipts: Receipt[]): Section[] {
 
 // ---- UI ------------------------------------------------------------------
 export default function ReceiptsPage() {
-  const [isLoading, setIsLoading]   = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setRefreshing] = useState(false);
+  const [showRefreshLottie, setShowRefreshLottie] = useState(false);
   const [error, setError]           = useState<string | null>(null);
   const [receipts, setReceipts]     = useState<Receipt[]>([]);
   const [snack, setSnack] = useState<string | null>(null);
+  const [showSuccessSplash, setShowSuccessSplash] = useState(false);
   const snackTimer = React.useRef<NodeJS.Timeout | null>(null);
 
   const showSnack = useCallback((msg: string) => {
@@ -112,11 +115,16 @@ export default function ReceiptsPage() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    try {
-      await load();
-    } finally {
+    setShowRefreshLottie(true);
+    
+    // Load data in background while animation plays
+    await load();
+    
+    // Wait for animation to complete
+    setTimeout(() => {
+      setShowRefreshLottie(false);
       setRefreshing(false);
-    }
+    },2500);
   }, [load]);
 
   useEffect(() => {
@@ -132,13 +140,47 @@ export default function ReceiptsPage() {
 
 
   // ---- Render states -----------------------------------------------------
+  if (isLoading || (isRefreshing && showRefreshLottie)) {
+    return (
+      <SafeAreaView style={styles.screen}>
+        <View style={styles.header}>
+          <View style={styles.titleContainer}>
+            <Text style={styles.title}>קבלות</Text>
+            <LottieView
+              source={require('../../assets/receipts-navbar-animation.json')}
+              autoPlay
+              loop
+              style={{ width: 60, height: 60, marginBottom: 0 }}
+            />
+          </View>
+        </View>
+        <View style={styles.center}>
+          <LottieView
+            source={require('../../assets/raise-animation.json')}
+            autoPlay
+            speed={1.3}
+            loop={true}
+                        style={{ width: 300, height: 300 }}
+            
+          />
+          <Text style={styles.loadingText}>טוען את הקבלות…</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.screen}>
       <StatusBar barStyle="dark-content" />
       <View style={styles.header}>
         <View style={styles.titleContainer}>
           <Text style={styles.title}>קבלות</Text>
-          <Text style={styles.titleEmoji}>🧾</Text>
+          <LottieView
+            source={require('../../assets/receipts-navbar-animation.json')}
+            autoPlay
+            loop
+            style={{ width: 60, height: 60, marginBottom: 0 }}
+          />
         </View>
       </View>
       {isLoading ? (
@@ -180,7 +222,7 @@ export default function ReceiptsPage() {
               <Text style={styles.sectionSum}>{nis.format(section.sum)}</Text>
             </View>
           )}
-          renderItem={({ item }) => <ReceiptRow item={item} onDownload={showSnack} />}
+          renderItem={({ item }) => <ReceiptRow item={item} onDownload={showSnack} setShowSuccessSplash={setShowSuccessSplash} />}
           ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
           SectionSeparatorComponent={() => <View style={{ height: 12 }} />}
         />
@@ -190,32 +232,48 @@ export default function ReceiptsPage() {
           <Text style={styles.snackText}>{snack}</Text>
         </View>
       ) : null}
+      {/* Fullscreen overlay, not inside any card or list */}
+      {showSuccessSplash && (
+        <View pointerEvents="none" style={[StyleSheet.absoluteFill, { zIndex: 9999, elevation: 9999, position: 'absolute', left: 0, top: 0, right: 0, bottom: 0 }]}> 
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f0ecd8ff' }}>
+            <LottieView
+              source={require('../../assets/download-success-animation.json')}
+              autoPlay
+              loop={false}
+              speed={1.3}
+              style={{ width: 220, height: 220 }}
+            />
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
 
 // ---- Row component -------------------------------------------------------
-function ReceiptRow({ item, onDownload }: { item: Receipt, onDownload: (msg: string) => void }) {
+function ReceiptRow({ item, onDownload, setShowSuccessSplash }: { item: Receipt, onDownload: (msg: string) => void, setShowSuccessSplash: (v: boolean) => void }) {
   const date = new Date(item.createdDate);
 
   const handleDownload = async () => {
-    try {
-      const downloadUrl = `https://zenlist.hack-ops.net/api/receipts/${item.file}/download`;
-      const fileName = `${item.company}-${item.city}-${item.file}.pdf`;
-      const fileUri = FileSystem.cacheDirectory + fileName;
-      
-      const downloadResult = await FileSystem.downloadAsync(downloadUrl, fileUri);
-      
-      if (downloadResult.status === 200) {
-        onDownload("הקבלה הורדה בהצלחה!");
-        await Sharing.shareAsync(downloadResult.uri);
-      } else {
+    setShowSuccessSplash(true);
+    setTimeout(async () => {
+      setShowSuccessSplash(false);
+      try {
+        const downloadUrl = `https://zenlist.hack-ops.net/api/receipts/${item.file}/download`;
+        const fileName = `${item.company}-${item.city}-${item.file}.pdf`;
+        const fileUri = FileSystem.cacheDirectory + fileName;
+        const downloadResult = await FileSystem.downloadAsync(downloadUrl, fileUri);
+        if (downloadResult.status === 200) {
+          onDownload("הקבלה הורדה בהצלחה!");
+          await Sharing.shareAsync(downloadResult.uri);
+        } else {
+          onDownload("שגיאה בהורדת הקבלה.");
+        }
+      } catch (error) {
+        console.error(error);
         onDownload("שגיאה בהורדת הקבלה.");
       }
-    } catch (error) {
-      console.error(error);
-      onDownload("שגיאה בהורדת הקבלה.");
-    }
+    }, 5000);
   };
 
   return (
@@ -234,6 +292,15 @@ function ReceiptRow({ item, onDownload }: { item: Receipt, onDownload: (msg: str
           <Text style={styles.meta}>{item.city}</Text>
         </View>
         <Text style={styles.amount}>{nis.format(item.total)}</Text>
+        <Pressable onPress={handleDownload} style={[styles.downloadButton, { marginLeft: 1 }]}> 
+          <LottieView
+            source={require('../../assets/download.json')}
+            autoPlay
+            loop
+            speed={1.4}
+            style={{ width: 42, height: 42 }}
+          />
+        </Pressable>
       </View>
 
       <View style={styles.cardBottom}>
@@ -241,9 +308,6 @@ function ReceiptRow({ item, onDownload }: { item: Receipt, onDownload: (msg: str
           <Ionicons name="document-text-outline" size={14} color="#506c4fff" />
           <Text style={styles.badgeText}>#{item.file}</Text>
         </View>
-        <Pressable onPress={handleDownload} style={styles.downloadButton}>
-          <Ionicons name="download-outline" size={20} color="#506c4fff" />
-        </Pressable>
         <Text style={styles.dateText}>
           {date.toLocaleDateString("he-IL", {
             year: "numeric",
@@ -278,7 +342,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     alignSelf: 'flex-end',
     paddingRight: 16,
-    gap: 8,
+    gap: 2, // Reduced gap for closer animation
   },
   title: {
     fontSize: 32,
@@ -367,6 +431,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#fffdefff",
     borderRadius: 5,
     padding: 16,
+    // Remove extra top padding
     shadowColor: "#545353ff",
     shadowOpacity: 0.02,
     shadowRadius: 5,

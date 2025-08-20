@@ -10,8 +10,10 @@ import {
   StyleSheet,
   Text,
   View,
+  Animated,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import LottieView from 'lottie-react-native';
 
 // ---------- Types ----------
 type ListItem = {
@@ -32,7 +34,7 @@ export default function ShoppingListPage() {
   const [isRefreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<ListItem[]>([]);
-  
+
   // UI feedback state
   const [snack, setSnack] = useState<string | null>(null);
   const snackTimer = useRef<NodeJS.Timeout | null>(null);
@@ -54,15 +56,15 @@ export default function ShoppingListPage() {
       const res = await fetch(listApi);
       if (!res.ok) throw new Error(`שגיאת שרת: ${res.status}`);
       const data = await res.json();
-      
+
       const itemsArray = Object.values(data).filter(
         (item): item is ListItem => typeof item === 'object' && item !== null && 'id' in item
       );
-      
+
       // Collapse all categories by default on load
       const allCategories = new Set(itemsArray.map(item => item.category || 'כללי'));
       setCollapsedCategories(allCategories);
-      
+
       setItems(itemsArray);
     } catch (e: any) {
       setError("שגיאה בטעינת רשימת הקניות. נסה שוב.");
@@ -75,8 +77,16 @@ export default function ShoppingListPage() {
   // Handler for pull-to-refresh
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
+    setShowRefreshLottie(true);
+
+    // Load data in background while animation plays
     await load();
-    setRefreshing(false);
+
+    // Wait for animation to complete
+    setTimeout(() => {
+      setShowRefreshLottie(false);
+      setRefreshing(false);
+    }, 7000);
   }, [load]);
 
   // Initial load effect
@@ -124,7 +134,7 @@ export default function ShoppingListPage() {
       showSnack(`שגיאה בהסרת פריט: ${error.message}`);
     }
   };
-  
+
   // API call to update an item's quantity
   const updateItemQuantity = async (itemId: string, quantity: number) => {
     try {
@@ -178,7 +188,12 @@ export default function ShoppingListPage() {
     <View style={styles.header}>
       <View style={styles.titleContainer}>
         <Text style={styles.title}>רשימת קניות</Text>
-        <Text style={styles.titleEmoji}>🛒</Text>
+        <LottieView
+          source={require('../../assets/cart-navbar-animation.json')}
+          autoPlay
+          loop
+          style={{ width: 32, height: 32 }}
+        />
       </View>
       {totalItems > 0 && (
         <Text style={styles.totalItemsText}>
@@ -190,12 +205,30 @@ export default function ShoppingListPage() {
 
   // --- Render Logic ---
 
-  if (isLoading) {
+  // Show refresh animation at top when refreshing
+  const [showRefreshLottie, setShowRefreshLottie] = useState(false);
+  useEffect(() => {
+    if (isRefreshing) {
+      setShowRefreshLottie(true);
+      const timeout = setTimeout(() => {
+        setShowRefreshLottie(false);
+        setRefreshing(false);
+      }, 1600);
+      return () => clearTimeout(timeout);
+    }
+  }, [isRefreshing]);
+
+  if (isLoading || (isRefreshing && showRefreshLottie)) {
     return (
       <SafeAreaView style={styles.screen}>
         <ListHeader totalItems={0} />
         <View style={styles.center}>
-          <ActivityIndicator size="large" color="#506c4fff" />
+          <LottieView
+            source={require('../../assets/raise-animation.json')}
+            autoPlay
+            loop
+            style={{ width: 300, height: 300 }}
+          />
           <Text style={styles.loadingText}>טוען רשימת קניות…</Text>
         </View>
       </SafeAreaView>
@@ -247,19 +280,22 @@ export default function ShoppingListPage() {
             <Text style={styles.sectionItemCount}>{data.length} פריטים</Text>
           </Pressable>
         )}
-        renderItem={({ item, section }) => {
-          if (collapsedCategories.has(section.title)) return null;
+        renderItem={({ item, section, index }) => {
+          const isVisible = !collapsedCategories.has(section.title);
           return (
-            <ListItemRow
+            <AnimatedListItemRow
+              key={item.id + '-' + isVisible}
               item={item}
               onToggleDone={toggleItemDone}
               onDelete={deleteItem}
               onUpdateQuantity={updateItemQuantity}
+              index={index}
+              visible={isVisible}
             />
           );
         }}
         refreshControl={
-          <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor="#506c4fff" />
+          <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor="transparent" />
         }
       />
       {snack && (
@@ -305,6 +341,61 @@ function ListItemRow({ item, onToggleDone, onDelete, onUpdateQuantity }: { item:
   );
 }
 
+// ---------- Component: Animated List Item Row ----------
+function AnimatedListItemRow({ item, onToggleDone, onDelete, onUpdateQuantity, index, visible }: { item: ListItem, onToggleDone: (itemId: string, doneStatus: boolean) => void, onDelete: (itemId: string) => void, onUpdateQuantity: (itemId: string, quantity: number) => void, index: number, visible: boolean }) {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(20)).current;
+  const [shouldRender, setShouldRender] = useState(visible);
+
+  useEffect(() => {
+    if (visible) {
+      setShouldRender(true);
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 350,
+          delay: index * 80,
+          useNativeDriver: true,
+        }),
+        Animated.timing(translateY, {
+          toValue: 0,
+          duration: 350,
+          delay: index * 80,
+          useNativeDriver: true,
+        })
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 250,
+          useNativeDriver: true,
+        }),
+        Animated.timing(translateY, {
+          toValue: 20,
+          duration: 250,
+          useNativeDriver: true,
+        })
+      ]).start(() => setShouldRender(false));
+    }
+  }, [visible]);
+
+  if (!shouldRender) return null;
+
+  return (
+    <Animated.View style={{
+      opacity: fadeAnim,
+      transform: [{ translateY }],
+    }}>
+      <ListItemRow
+        item={item}
+        onToggleDone={onToggleDone}
+        onDelete={onDelete}
+        onUpdateQuantity={onUpdateQuantity}
+      />
+    </Animated.View>
+  );
+}
 
 // ---------- Styles ----------
 const styles = StyleSheet.create({
