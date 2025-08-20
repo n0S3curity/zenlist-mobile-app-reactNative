@@ -4,7 +4,7 @@
     "slug": "zenlist-mobile-app",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/trolley-cart.png",
+    "icon": "./assets/images/shopping-cart.png",
     "scheme": "zenlistmobileapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -18,7 +18,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/trolley-cart.png",
+        "foregroundImage": "./assets/images/shopping-cart.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
@@ -27,7 +27,7 @@
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/trolley-cart.png"
+      "favicon": "./assets/images/shopping-cart.png"
     },
     "plugins": [
       "expo-router"
