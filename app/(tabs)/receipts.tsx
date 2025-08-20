@@ -1,19 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useState, useRef } from "react";
-import {
-  ActivityIndicator,
-  I18nManager,
-  Pressable,
-  SafeAreaView,
-  SectionList,
-  SectionListData,
-  StatusBar,
-  StyleSheet,
-  Text,
-  View,
-  RefreshControl,
-  Platform,
-  Alert,
-} from "react-native";
+import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import { ActivityIndicator, I18nManager, Pressable, SafeAreaView, SectionList, StatusBar, StyleSheet, Text, View, RefreshControl, Platform, Alert, Modal, TextInput, TouchableOpacity, ScrollView } from "react-native";
+import FABAnim from '../../assets/FAB-animation.json';
 import { Ionicons } from "@expo/vector-icons";
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
@@ -82,7 +69,13 @@ function groupByCompanyCity(receipts: Receipt[]): Section[] {
 
 
 // ---- UI ------------------------------------------------------------------
+
 export default function ReceiptsPage() {
+  // FAB & Modal state
+  const [modalVisible, setModalVisible] = useState(false);
+  const [textValue, setTextValue] = useState('');
+  const [loadingSms, setLoadingSms] = useState(false);
+  const [permissionError, setPermissionError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setRefreshing] = useState(false);
   const [showRefreshLottie, setShowRefreshLottie] = useState(false);
@@ -90,7 +83,86 @@ export default function ReceiptsPage() {
   const [receipts, setReceipts]     = useState<Receipt[]>([]);
   const [snack, setSnack] = useState<string | null>(null);
   const [showSuccessSplash, setShowSuccessSplash] = useState(false);
-  const snackTimer = React.useRef<NodeJS.Timeout | null>(null);
+  const snackTimer = useRef<NodeJS.Timeout | null>(null);
+
+  const [foundLinks, setFoundLinks] = useState<string[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Extract links from text
+  const extractLinks = (text: string) => {
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const matches = text.match(urlRegex);
+    return matches || [];
+  };
+
+  // Handle text input change
+  const handleTextChange = (text: string) => {
+    setTextValue(text);
+    const links = extractLinks(text);
+    setFoundLinks(links);
+    setPermissionError(null);
+  };
+
+  // Submit link to API
+  const submitLink = async (url: string) => {
+    setIsSubmitting(true);
+    setModalVisible(false); // Hide modal to show loading animation
+    
+    try {
+      const response = await fetch('https://zenlist.hack-ops.net/api/fetchReceipt', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ url: String(url) }),
+      });
+
+      const responseBody = await response.text();
+      let errorMessage = '';
+
+      if (!response.ok) {
+        if (responseBody.includes("already exists")) {
+          errorMessage = "הקישור כבר קיים במערכת";
+        } else {
+          errorMessage = `שגיאה בשרת: ${response.status}`;
+        }
+        throw new Error(errorMessage);
+      }
+
+      // Show success animation
+      setIsSubmitting(false);
+      setShowSuccessSplash(true);
+      
+      // Wait for success animation then show snackbar
+      setTimeout(() => {
+        setShowSuccessSplash(false);
+        showSnack('הקבלה נוספה בהצלחה!');
+      }, 2000);
+
+      await load(); // Reload receipts after successful submission
+      setTextValue('');
+      setFoundLinks([]);
+    } catch (e: any) {
+      showSnack(e.message || 'אירעה שגיאה בעיבוד הקבלה');
+      // Reopen modal with error after a short delay
+      setTimeout(() => {
+        setModalVisible(true);
+        setPermissionError(e.message || 'אירעה שגיאה בעיבוד הקבלה');
+      }, 500);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Handle FAB press
+  const handleFabPress = () => {
+    console.log('FAB pressed');
+    setModalVisible(true);
+    setTextValue('');
+    setFoundLinks([]);
+    setPermissionError(null);
+  };
+
 
   const showSnack = useCallback((msg: string) => {
     setSnack(msg);
@@ -128,11 +200,6 @@ export default function ReceiptsPage() {
   }, [load]);
 
   useEffect(() => {
-    // ensure RTL layout if device is LTR
-    if (!I18nManager.isRTL) {
-      // You can skip forcing RTL; RN mirrors correctly with he-IL text.
-      // If you *must* force RTL globally, do it at app bootstrap (not here).
-    }
     load();
   }, [load]);
 
@@ -169,6 +236,34 @@ export default function ReceiptsPage() {
     );
   }
 
+  const renderLoadingOverlay = () => (
+    <View style={[StyleSheet.absoluteFill, { zIndex: 9999, elevation: 9999, backgroundColor: '#f0ecd8ff' }]}>
+      <SafeAreaView style={{ flex: 1 }}>
+        <View style={styles.header}>
+          <View style={styles.titleContainer}>
+            <Text style={styles.title}>קבלות</Text>
+            <LottieView
+              source={require('../../assets/receipts-navbar-animation.json')}
+              autoPlay
+              loop
+              style={{ width: 60, height: 60, marginBottom: 0 }}
+            />
+          </View>
+        </View>
+        <View style={styles.center}>
+          <LottieView
+            source={require('../../assets/raise-animation.json')}
+            autoPlay
+            speed={1.3}
+            loop={true}
+            style={{ width: 300, height: 300 }}
+          />
+          <Text style={styles.loadingText}>מעבד את הקבלה...</Text>
+        </View>
+      </SafeAreaView>
+    </View>
+  );
+
   return (
     <SafeAreaView style={styles.screen}>
       <StatusBar barStyle="dark-content" />
@@ -187,7 +282,6 @@ export default function ReceiptsPage() {
         <View style={styles.loadingWrap}>
           <ActivityIndicator size="large" color="#506c4fff" />
           <Text style={styles.loadingText}>טוען את הקבלות…</Text>
-          {/* subtle skeletons */}
           <View style={styles.skeletonCard} />
           <View style={styles.skeletonCard} />
           <View style={styles.skeletonCard} />
@@ -232,7 +326,65 @@ export default function ReceiptsPage() {
           <Text style={styles.snackText}>{snack}</Text>
         </View>
       ) : null}
+      {/* FAB for reading OSHERAD messages */}
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={handleFabPress} // <-- Use the new handler function here
+        activeOpacity={0.8}
+      >
+        <LottieView source={FABAnim} autoPlay loop style={{ width: '100%', height: '100%' }} />
+      </TouchableOpacity>
+      {/* Modal for pasting message and extracting links */}
+      <Modal
+        visible={modalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>הדבק הודעה מ-OSHERAD</Text>
+            {permissionError ? (
+              <Text style={styles.permissionError}>{permissionError}</Text>
+            ) : null}
+            <TextInput
+              style={styles.bigTextBox}
+              multiline
+              value={textValue}
+              onChangeText={handleTextChange}
+              placeholder="הדבק כאן את ההודעה..."
+              editable={!isSubmitting}
+            />
+            {foundLinks.length > 0 && (
+              <ScrollView style={styles.linksList}>
+                {foundLinks.map((link, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={styles.linkItem}
+                    onPress={() => submitLink(link)}
+                    disabled={isSubmitting}
+                  >
+                    <Text style={styles.linkText} numberOfLines={1}>{link}</Text>
+                    {isSubmitting && <ActivityIndicator size="small" color="#506c4fff" />}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
+            <TouchableOpacity
+              style={styles.closeModalBtn}
+              onPress={() => {
+                setModalVisible(false);
+                setTextValue('');
+                setFoundLinks([]);
+              }}
+            >
+              <Text style={styles.closeModalBtnText}>סגור</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
       {/* Fullscreen overlay, not inside any card or list */}
+      {/* Success animation overlay */}
       {showSuccessSplash && (
         <View pointerEvents="none" style={[StyleSheet.absoluteFill, { zIndex: 9999, elevation: 9999, position: 'absolute', left: 0, top: 0, right: 0, bottom: 0 }]}> 
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f0ecd8ff' }}>
@@ -246,6 +398,8 @@ export default function ReceiptsPage() {
           </View>
         </View>
       )}
+      {/* Loading animation overlay */}
+      {isSubmitting && renderLoadingOverlay()}
     </SafeAreaView>
   );
 }
@@ -323,6 +477,94 @@ function ReceiptRow({ item, onDownload, setShowSuccessSplash }: { item: Receipt,
 
 // ---- Styles --------------------------------------------------------------
 const styles = StyleSheet.create({
+  fab: {
+    position: 'absolute',
+    bottom: 28,
+    right: 28,
+    backgroundColor: '#506c4fff',
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 1 },
+    zIndex: 10,
+  },
+  linksList: {
+    maxHeight: 150,
+    marginVertical: 10,
+  },
+  linkItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+    padding: 12,
+    marginVertical: 4,
+    borderRadius: 8,
+  },
+  linkText: {
+    color: '#506c4fff',
+    flex: 1,
+    marginRight: 10,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#fffdefff',
+    borderRadius: 18,
+    padding: 24,
+    width: '90%',
+    maxWidth: 420,
+    alignItems: 'stretch',
+    elevation: 8,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#506c4fff',
+    textAlign: 'center',
+    marginBottom: 18,
+  },
+  bigTextBox: {
+    minHeight: 120,
+    maxHeight: 220,
+    borderColor: '#e0e0e0',
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 14,
+    fontSize: 17,
+    color: '#0f0e0eff',
+    backgroundColor: '#fff',
+    marginBottom: 18,
+    textAlign: 'right',
+  },
+  closeModalBtn: {
+    backgroundColor: '#506c4fff',
+    borderRadius: 10,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  closeModalBtnText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 18,
+  },
+  permissionError: {
+    color: '#B91C1C',
+    fontSize: 15,
+    textAlign: 'center',
+    marginBottom: 10,
+  },
   screen: {
     flex: 1,
     backgroundColor: "#f0ecd8ff",
