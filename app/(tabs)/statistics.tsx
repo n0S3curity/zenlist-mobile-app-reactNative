@@ -57,15 +57,17 @@ export default function StatisticsPage() {
 
   if (loading || (isRefreshing && showRefreshLottie)) {
     return (
-      <View style={styles.center}>
-        <LottieView
-                    source={require('../../assets/raise-animation.json')}
-                    autoPlay
-                    speed={1.3}
-                    loop={true}
-                                style={{ width: 300, height: 300 }}
-                    
-                  /><Text style={styles.loadingText}>טוען נתונים…</Text>
+      <View style={styles.screen}>
+        <View style={styles.center}>
+          <LottieView
+            source={require('../../assets/raise-animation.json')}
+            autoPlay
+            speed={1.3}
+            loop={true}
+            style={{ width: 300, height: 300 }}
+          />
+          <Text style={styles.loadingText}>טוען נתונים…</Text>
+        </View>
       </View>
     );
   }

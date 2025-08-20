@@ -11,9 +11,15 @@ import {
   Text,
   View,
   Animated,
+  TextInput,
+  KeyboardAvoidingView,
+  TouchableOpacity,
+  Keyboard,
+  PanResponder
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import LottieView from 'lottie-react-native';
+import Modal from 'react-native-modal';
 
 // ---------- Types ----------
 type ListItem = {
@@ -42,11 +48,29 @@ export default function ShoppingListPage() {
   // UI state for list sections
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
 
+  // FAB/modal state
+  const [modalVisible, setModalVisible] = useState(false);
+  const [addName, setAddName] = useState('');
+  const [addQuantity, setAddQuantity] = useState('1');
+  const [addCategory, setAddCategory] = useState('');
+  const [addLoading, setAddLoading] = useState(false);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [categorySuggestions, setCategorySuggestions] = useState<string[]>([]);
+  const [allSuggestions, setAllSuggestions] = useState<string[]>([]);
+  const [allCategories, setAllCategories] = useState<string[]>([]);
+
+  // Overlay state for add animation
+  const [showAddAnim, setShowAddAnim] = useState(false);
+
+  // Flash state for item highlight
+  const [flashItemId, setFlashItemId] = useState<string | null>(null);
+  const [flashOn, setFlashOn] = useState(false);
+
   // Function to show a temporary snackbar message
   const showSnack = useCallback((msg: string) => {
     setSnack(msg);
     if (snackTimer.current) clearTimeout(snackTimer.current);
-    snackTimer.current = setTimeout(() => setSnack(null), 2200) as unknown as NodeJS.Timeout;
+    snackTimer.current = setTimeout(() => setSnack(null), 5200) as unknown as NodeJS.Timeout;
   }, []);
 
   // Function to fetch the shopping list from the API
@@ -101,11 +125,16 @@ export default function ShoppingListPage() {
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ itemID: itemId })
+        body: JSON.stringify({ itemID: String(itemId) })
       });
       if (response.ok) {
         showSnack(`הפריט סומן כ${doneStatus ? 'בוצע' : 'לא בוצע'}.`);
         await load();
+        // find and reopen the category was open
+        const item = items.find(item => item.id === itemId);
+        if (item) {
+          toggleCategory(item.category || '');
+        }
       } else {
         const result = await response.json();
         throw new Error(result.error || response.statusText);
@@ -121,11 +150,16 @@ export default function ShoppingListPage() {
       const response = await fetch(`${listApi}/remove`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ itemID: itemId })
+        body: JSON.stringify({ itemID: String(itemId) })
       });
       if (response.ok) {
         showSnack('הפריט הוסר מהרשימה.');
         await load();
+        // find and reopen the category was open
+        const item = items.find(item => item.id === itemId);
+        if (item) {
+          toggleCategory(item.category || '');
+        }
       } else {
         const result = await response.json();
         throw new Error(result.error || response.statusText);
@@ -141,17 +175,73 @@ export default function ShoppingListPage() {
       const response = await fetch(`${listApi}/quantity`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ itemID: itemId, quantity })
+        body: JSON.stringify({ itemID: String(itemId), quantity })
       });
       if (response.ok) {
         showSnack(`כמות הפריט עודכנה.`);
         await load();
+        // find and reopen the category was open
+        const item = items.find(item => item.id === itemId);
+        if (item) {
+          toggleCategory(item.category || '');
+        }
       } else {
         const result = await response.json();
         throw new Error(result.error || response.statusText);
       }
     } catch (error: any) {
-      showSnack(`שגיאה בעדכון כמות: ${error.message}`);
+      showSnack(`שגיאה בעדכון כמות: ${JSON.stringify({ itemID: String(itemId), quantity , error: error.message })}`);
+    }
+  };
+
+  // Add item handler (move above return)
+  const handleAddItem = async () => {
+    if (!addName.trim() || !addCategory.trim() || !addQuantity) return;
+    setAddLoading(true);
+    setModalVisible(false); // Close modal immediately
+    setShowAddAnim(true); // Show animation
+    try {
+      const res = await fetch(`${listApi}/add`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ item: addName.trim(), quantity: Number(addQuantity), category: addCategory.trim(), method: 'manual' })
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'שגיאה בהוספה');
+      setTimeout(async () => {
+        setShowAddAnim(false);
+        setAddName('');
+        setAddQuantity('');
+        setAddCategory('');
+        await load();
+      }, 1500);
+    } catch (e: any) {
+      setTimeout(() => {
+        setShowAddAnim(false);
+        // Try to find the item by name
+        const found = items.find(i => i.name.trim() === addName.trim());
+        if (found) {
+          toggleCategory(found.category || '');
+          setFlashItemId(found.id);
+          let flashes = 0;
+          const flashInterval = setInterval(() => {
+            setFlashOn(f => !f);
+            flashes++;
+            if (flashes > 7) {
+              clearInterval(flashInterval);
+              setFlashItemId(null);
+              setFlashOn(false);
+            }
+            //display snackbar message
+          }, 200);
+        } else {
+          setModalVisible(true);
+        }
+        setAddLoading(false);
+        showSnack(e.message);
+      }, 1500);
+    } finally {
+      setAddLoading(false);
     }
   };
 
@@ -167,7 +257,16 @@ export default function ShoppingListPage() {
     }, {} as Record<string, ListItem[]>);
 
     return Object.keys(grouped)
-      .map(category => ({ title: category, data: grouped[category] }))
+      .map(category => {
+        // Separate not-done and done items
+        const notDone = grouped[category].filter(i => !i.done);
+        const done = grouped[category].filter(i => i.done);
+        return {
+          title: category,
+          data: [...notDone, ...done],
+          notDoneCount: notDone.length
+        };
+      })
       .sort((a, b) => a.title.localeCompare(b.title));
   }, [items]);
 
@@ -190,7 +289,7 @@ export default function ShoppingListPage() {
         <Text style={styles.title}>רשימת קניות</Text>
         <LottieView
           source={require('../../assets/cart-navbar-animation.json')}
-          autoPlay
+          
           loop
           style={{ width: 32, height: 32 }}
         />
@@ -202,6 +301,17 @@ export default function ShoppingListPage() {
       )}
     </View>
   );
+
+  // Suggestion logic for name
+  useEffect(() => {
+    if (!addName) setSuggestions([]);
+    else setSuggestions(allSuggestions.filter(s => s.includes(addName) && s !== addName).slice(0, 5));
+  }, [addName, allSuggestions]);
+  // Suggestion logic for category
+  useEffect(() => {
+    if (!addCategory) setCategorySuggestions([]);
+    else setCategorySuggestions(allCategories.filter(c => c.includes(addCategory)).slice(0, 5));
+  }, [addCategory, allCategories]);
 
   // --- Render Logic ---
 
@@ -267,39 +377,131 @@ export default function ShoppingListPage() {
   return (
     <SafeAreaView style={styles.screen}>
       <ListHeader totalItems={items.length} />
-      <SectionList
-        contentContainerStyle={styles.listContent}
-        sections={categorizedItems}
-        keyExtractor={(item) => item.id}
-        renderSectionHeader={({ section: { title, data } }) => (
-          <Pressable onPress={() => toggleCategory(title)} style={styles.sectionHeader}>
-            <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 8 }}>
-              <Ionicons name={collapsedCategories.has(title) ? "chevron-down-outline" : "chevron-up-outline"} size={24} color="#333" />
-              <Text style={styles.sectionTitle}>{title}</Text>
+      <FlashContext.Provider value={{ flashItemId, flashOn }}>
+        <SectionList
+          contentContainerStyle={styles.listContent}
+          sections={categorizedItems}
+          keyExtractor={(item) => item.id}
+          renderSectionHeader={({ section: { title, data, notDoneCount } }) => (
+            <Pressable onPress={() => toggleCategory(title)} style={styles.sectionHeader}>
+              <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 8 }}>
+                <Ionicons name={collapsedCategories.has(title) ? "chevron-down-outline" : "chevron-up-outline"} size={24} color="#333" />
+                <Text style={styles.sectionTitle}>{title}</Text>
+              </View>
+              <Text style={styles.sectionItemCount}>{notDoneCount} פריטים</Text>
+            </Pressable>
+          )}
+          renderItem={({ item, section, index }) => {
+            const isVisible = !collapsedCategories.has(section.title);
+            return (
+              <AnimatedListItemRow
+                key={item.id + '-' + isVisible}
+                item={item}
+                onToggleDone={toggleItemDone}
+                onDelete={deleteItem}
+                onUpdateQuantity={updateItemQuantity}
+                index={index}
+                visible={isVisible}
+              />
+            );
+          }}
+          refreshControl={
+            <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor="transparent" />
+          }
+        />
+      </FlashContext.Provider>
+      {/* FAB */}
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={() => setModalVisible(true)}
+        activeOpacity={0.8}
+      >
+        <LottieView source={require('../../assets/FAB-animation.json')} autoPlay loop style={{ width: '100%', height: '100%' }} />
+      </TouchableOpacity>
+      {/* Modal */} 
+      <Modal
+        isVisible={modalVisible}
+        onBackdropPress={() => setModalVisible(false)}
+        onSwipeComplete={() => setModalVisible(false)}
+        // swipe up to show bigger and down for close
+        swipeDirection="down"
+        style={styles.modal}
+        backdropOpacity={0.3}
+        propagateSwipe
+      >
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalContent}>
+          <View style={styles.modalHandle} />
+          <View style={{ flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', marginBottom: 18 }}>
+            <Text style={styles.modalTitle}>מה בא לך היום?</Text>
+            {/* animation should be size controled in percentage */}
+            <LottieView source={require('../../assets/cart-add.json')} autoPlay loop style={{ width: '15%', height: '120%', marginLeft: 8, marginRight: 5, marginTop: 0, marginBottom: 22 }} />
+          </View>
+          {/* Message area inside modal */}
+          {modalVisible && snack && (
+            <View style={styles.modalMessage}>
+              <Text style={styles.snackText}>{snack}</Text>
             </View>
-            <Text style={styles.sectionItemCount}>{data.length} פריטים</Text>
-          </Pressable>
-        )}
-        renderItem={({ item, section, index }) => {
-          const isVisible = !collapsedCategories.has(section.title);
-          return (
-            <AnimatedListItemRow
-              key={item.id + '-' + isVisible}
-              item={item}
-              onToggleDone={toggleItemDone}
-              onDelete={deleteItem}
-              onUpdateQuantity={updateItemQuantity}
-              index={index}
-              visible={isVisible}
-            />
-          );
-        }}
-        refreshControl={
-          <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor="transparent" />
-        }
-      />
-      {snack && (
-        <View style={styles.snack}>
+          )}
+          <TextInput
+            style={styles.input}
+            placeholder="שם פריט"
+            value={addName}
+            onChangeText={setAddName}
+            autoFocus
+            returnKeyType="next"
+          />
+          {modalVisible && suggestions.length > 0 && (
+            <View style={styles.suggestionList}>
+              {suggestions.map(s => (
+                <TouchableOpacity key={s} onPress={() => setAddName(s)} style={styles.suggestionItem}>
+                  <Text style={styles.suggestionText}>{s}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+          <TextInput
+            style={styles.input}
+            placeholder="כמות"
+            value={addQuantity}
+            onChangeText={setAddQuantity}
+            keyboardType="numeric"
+            returnKeyType="next"
+            onFocus={() => { if (addQuantity === '1') setAddQuantity(''); }}
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="קטגוריה"
+            value={addCategory}
+            onChangeText={setAddCategory}
+            returnKeyType="done"
+          />
+          {modalVisible && categorySuggestions.length > 0 && (
+            <View style={styles.suggestionList}>
+              {categorySuggestions.map(c => (
+                <TouchableOpacity key={c} onPress={() => setAddCategory(c)} style={styles.suggestionItem}>
+                  <Text style={styles.suggestionText}>{c}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+          <TouchableOpacity
+            style={[styles.addButton, (!addName.trim() || !addCategory.trim() || !addQuantity) && { opacity: 0.5 }]}
+            onPress={handleAddItem}
+            disabled={!addName.trim() || !addCategory.trim() || !addQuantity || addLoading}
+          >
+            <Text style={styles.addButtonText}>תעמיס לי !</Text>
+          </TouchableOpacity>
+        </KeyboardAvoidingView>
+      </Modal>
+      {/* Add animation overlay above modal */}
+      {showAddAnim && (
+        <View style={styles.addAnimOverlayNoBg} pointerEvents="none">
+          <LottieView source={require('../../assets/refresh-animation.json')} autoPlay loop style={{ width: 450, height: 450 }} />
+        </View>
+      )}
+      {/* Snackbar only when modal is closed */}
+      {!modalVisible && snack && (
+        <View style={[styles.snack, { zIndex: 2000, elevation: 2000 }]} pointerEvents="none">
           <Text style={styles.snackText}>{snack}</Text>
         </View>
       )}
@@ -309,8 +511,58 @@ export default function ShoppingListPage() {
 
 // ---------- Component: List Item Row ----------
 function ListItemRow({ item, onToggleDone, onDelete, onUpdateQuantity }: { item: ListItem, onToggleDone: (itemId: string, doneStatus: boolean) => void, onDelete: (itemId: string) => void, onUpdateQuantity: (itemId: string, quantity: number) => void }) {
+  const translateX = useRef(new Animated.Value(0)).current;
+  const [dismissed, setDismissed] = useState(false);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dx) > 10,
+      onPanResponderMove: (_, gestureState) => {
+        if (gestureState.dx > 0) {
+          translateX.setValue(gestureState.dx);
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dx > 120) {
+          Animated.timing(translateX, {
+            toValue: 500,
+            duration: 200,
+            useNativeDriver: true,
+          }).start(() => {
+            setDismissed(true);
+            onDelete(item.id);
+          });
+        } else {
+          Animated.spring(translateX, {
+            toValue: 0,
+            useNativeDriver: true,
+          }).start();
+        }
+      },
+      onPanResponderTerminate: () => {
+        Animated.spring(translateX, {
+          toValue: 0,
+          useNativeDriver: true,
+        }).start();
+      },
+    })
+  ).current;
+
+  const { flashItemId, flashOn } = React.useContext(FlashContext);
+
+  if (dismissed) return null;
+
   return (
-    <View style={[styles.listItemRow, item.done && styles.listItemDone]}>
+    <Animated.View
+      style={[
+        styles.listItemRow,
+        item.done && styles.listItemDone,
+        flashItemId === item.id && flashOn && styles.flashHighlight,
+        { transform: [{ translateX }] },
+      ]}
+      {...panResponder.panHandlers}
+      pointerEvents={item.done ? 'auto' : 'auto'}
+    >
       <Pressable onPress={() => onToggleDone(item.id, !item.done)} style={styles.checkboxContainer}>
         <Ionicons
           name={item.done ? "checkbox" : "square-outline"}
@@ -323,21 +575,21 @@ function ListItemRow({ item, onToggleDone, onDelete, onUpdateQuantity }: { item:
           {item.name}
         </Text>
       </View>
-      <View style={styles.actionsContainer}>
+      <View style={item.done ? styles.actionsContainerDisabled : styles.actionsContainer}>
         <View style={styles.quantityContainer}>
-          <Pressable onPress={() => onUpdateQuantity(item.id, item.quantity + 1)}>
-            <Ionicons name="add-circle-outline" size={24} color="#506c4fff" />
+          <Pressable onPress={() => onUpdateQuantity(item.id, item.quantity + 1)} disabled={item.done}>
+            <Ionicons name="add-circle-outline" size={24} color={item.done ? '#ccc' : '#506c4fff'} />
           </Pressable>
-          <Text style={styles.itemQuantity}>{item.quantity}</Text>
-          <Pressable onPress={() => onUpdateQuantity(item.id, Math.max(1, item.quantity - 1))}>
-            <Ionicons name="remove-circle-outline" size={24} color="#506c4fff" />
+          <Text style={[styles.itemQuantity, item.done && styles.itemDoneText]}>{item.quantity}</Text>
+          <Pressable onPress={() => onUpdateQuantity(item.id, Math.max(1, item.quantity - 1))} disabled={item.done}>
+            <Ionicons name="remove-circle-outline" size={24} color={item.done ? '#ccc' : '#506c4fff'} />
           </Pressable>
         </View>
-        <Pressable onPress={() => onDelete(item.id)}>
-          <Ionicons name="trash-outline" size={24} color="#B91C1C" />
+        <Pressable onPress={() => onDelete(item.id)} disabled={item.done}>
+          <Ionicons name="trash-outline" size={24} color={item.done ? '#eee' : '#B91C1C'} />
         </Pressable>
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -419,18 +671,152 @@ const styles = StyleSheet.create({
   retryBtnText: { color: "#fff", fontWeight: "700", fontSize: 16 },
   emptyTitle: { fontSize: 20, fontWeight: "700", color: "#506c4fff", textAlign: 'center' },
   emptySub: { fontSize: 15, color: "#666", textAlign: 'center' },
-  sectionHeader: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 8, borderBottomWidth: 1, borderBottomColor: '#506c4fff' },
+  sectionHeader: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 8, borderBottomWidth: 1, marginBottom: 5, borderBottomColor: '#506c4fff' },
   sectionTitle: { fontSize: 20, fontWeight: "700", color: "#333", textAlign: 'right' },
   sectionItemCount: { fontSize: 16, color: "#666" },
-  listItemRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', padding: 14, backgroundColor: '#fffdefff', borderRadius: 5, marginVertical: 5, shadowColor: "#506c4fff", shadowOpacity: 0.05, shadowRadius: 1, shadowOffset: { width: 0, height: 1 }, elevation: 0.5 },
-  listItemDone: { backgroundColor: '#f0f0f0' },
+  listItemRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', padding: 15, backgroundColor: '#fffdefff', borderRadius: 5, marginVertical: 5,marginHorizontal: 8,marginTop: 5 ,shadowColor: "#506c4fff", shadowOpacity: 0.05, shadowRadius: 1, shadowOffset: { width: 0, height: 1 }, elevation: 0.5 },
+  listItemDone: {
+    backgroundColor: '#f0f0f0',
+    opacity: 0.6,
+  },
   checkboxContainer: { padding: 4 },
   itemDetails: { flex: 1, alignItems: 'flex-end', marginHorizontal: 12 },
   itemName: { fontSize: 18, fontWeight: '600', color: '#333', textAlign: 'right' },
-  itemDoneText: { textDecorationLine: 'line-through', color: '#888' },
+  itemDoneText: {
+    textDecorationLine: 'line-through',
+    color: '#888',
+    textAlign: 'right',
+  },
   actionsContainer: { flexDirection: 'row-reverse', alignItems: 'center', gap: 12 },
+  actionsContainerDisabled: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 12,
+    opacity: 0.5,
+  },
   quantityContainer: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
   itemQuantity: { fontSize: 18, fontWeight: '600', color: '#333', minWidth: 20, textAlign: 'center' },
   snack: { position: "absolute", bottom: 24, alignSelf: "center", backgroundColor: "rgba(0,0,0,0.8)", paddingHorizontal: 16, paddingVertical: 12, borderRadius: 999, zIndex: 100 },
   snackText: { color: '#fff' },
+  fab: {
+    position: 'absolute',
+    bottom: 28,
+    right: 28,
+    backgroundColor: '#506c4fff',
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 1 },
+    zIndex: 10,
+  },
+  modal: {
+    justifyContent: 'flex-end',
+    margin: 0,
+  },
+  modalContent: {
+    backgroundColor: '#fffdefff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    paddingBottom: 40,
+    minHeight: 340,
+    alignItems: 'stretch',
+  },
+  modalHandle: {
+    width: 48,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#ccc',
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#506c4fff',
+    textAlign: 'center',
+    marginBottom: 18,
+  },
+  input: {
+    backgroundColor: '#fffdefff',
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#0f0e0eff',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    textAlign: 'right',
+    marginBottom: 10,
+  },
+  suggestionList: {
+    backgroundColor: '#fffdefff',
+    borderRadius: 8,
+    marginBottom: 10,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    elevation: 1,
+  },
+  suggestionItem: {
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+  },
+  suggestionText: {
+    fontSize: 15,
+    color: '#506c4fff',
+    textAlign: 'right',
+  },
+  addButton: {
+    backgroundColor: '#506c4fff',
+    borderRadius: 10,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  addButtonText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 18,
+  },
+  addAnimOverlay: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(240,236,216,0.85)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1000,
+  },
+  addAnimOverlayNoBg: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1000,
+  },
+  modalMessage: {
+    backgroundColor: 'rgba(238, 83, 63, 0.95)',
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 10,
+    alignItems: 'center',
+  },
+  flashHighlight: {
+    backgroundColor: '#ffe066',
+  },
 });
+
+// Flash context to pass flash state to ListItemRow
+const FlashContext = React.createContext<{ flashItemId: string | null, flashOn: boolean }>({ flashItemId: null, flashOn: false });
