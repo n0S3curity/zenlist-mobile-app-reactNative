@@ -13,7 +13,7 @@ function TabTransitionAnimation({ visible, onFinish }) {
       animationRef.current.play();
       const timeout = setTimeout(() => {
         onFinish();
-      }, 2500);
+      }, 100);
       return () => clearTimeout(timeout);
     }
   }, [visible]);
