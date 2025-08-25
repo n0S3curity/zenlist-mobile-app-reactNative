@@ -11,7 +11,8 @@ import {
   ActivityIndicator,
   Pressable,
   Linking,
-  KeyboardAvoidingView
+  KeyboardAvoidingView,
+  RefreshControl
 } from 'react-native';
 import Modal from 'react-native-modal';
 import { Ionicons } from "@expo/vector-icons";
@@ -204,6 +205,19 @@ export default function SettingsPage() {
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={onRefresh}
+            tintColor="transparent"
+            colors={["#506c4fff"]}
+            style={{ backgroundColor: 'transparent' }}
+            progressViewOffset={-30}
+            progressBackgroundColor="transparent"
+            // Custom Lottie animation overlay
+            // We'll overlay the LottieView below
+          />
+        }
       >
         
         <View style={styles.header}>
@@ -343,9 +357,9 @@ export default function SettingsPage() {
       </Modal>
 
 
-      {/* Loading Animation */}
+      {/* Loading Animation (overlay for pull-to-refresh and actions) */}
       {showRefreshLottie && (
-        <View style={[StyleSheet.absoluteFill, styles.loadingOverlay]}>
+        <View style={[StyleSheet.absoluteFill, styles.loadingOverlay]} pointerEvents="none">
           <LottieView
             source={require('../../assets/raise-animation.json')}
             autoPlay

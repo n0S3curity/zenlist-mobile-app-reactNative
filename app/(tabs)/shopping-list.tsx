@@ -15,7 +15,8 @@ import {
   KeyboardAvoidingView,
   TouchableOpacity,
   Keyboard,
-  PanResponder
+  PanResponder,
+  ScrollView
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import LottieView from 'lottie-react-native';
@@ -56,8 +57,37 @@ export default function ShoppingListPage() {
   const [addLoading, setAddLoading] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [categorySuggestions, setCategorySuggestions] = useState<string[]>([]);
+  const [showNameSuggestions, setShowNameSuggestions] = useState(false);
+  const [showCategorySuggestions, setShowCategorySuggestions] = useState(false);
   const [allSuggestions, setAllSuggestions] = useState<string[]>([]);
   const [allCategories, setAllCategories] = useState<string[]>([]);
+
+  // Fetch suggestions/categories from API when modal opens
+  useEffect(() => {
+    if (!modalVisible) return;
+    // Only fetch if not already loaded
+    if (allSuggestions.length > 0 && allCategories.length > 0) return;
+    fetch(listApi)
+      .then(res => res.json())
+      .then(data => {
+        // Suggestions
+        if (Array.isArray(data.suggestions)) {
+          setAllSuggestions(data.suggestions.filter((s: unknown) => s && typeof s === 'string'));
+        } else {
+          setAllSuggestions([]);
+        }
+        // Categories
+        if (data.categories && typeof data.categories === 'object') {
+          setAllCategories(Object.keys(data.categories));
+        } else {
+          setAllCategories([]);
+        }
+      })
+      .catch(() => {
+        setAllSuggestions([]);
+        setAllCategories([]);
+      });
+  }, [modalVisible]);
 
   // Overlay state for add animation
   const [showAddAnim, setShowAddAnim] = useState(false);
@@ -305,12 +335,21 @@ export default function ShoppingListPage() {
   // Suggestion logic for name
   useEffect(() => {
     if (!addName) setSuggestions([]);
-    else setSuggestions(allSuggestions.filter(s => s.includes(addName) && s !== addName).slice(0, 5));
+    else setSuggestions(
+      allSuggestions
+        .filter(s => s && s.includes(addName) && s !== addName)
+        .slice(0, 5)
+    );
   }, [addName, allSuggestions]);
+
   // Suggestion logic for category
   useEffect(() => {
     if (!addCategory) setCategorySuggestions([]);
-    else setCategorySuggestions(allCategories.filter(c => c.includes(addCategory)).slice(0, 5));
+    else setCategorySuggestions(
+      allCategories
+        .filter(c => c && c.includes(addCategory))
+        .slice(0, 5)
+    );
   }, [addCategory, allCategories]);
 
   // --- Render Logic ---
@@ -423,7 +462,6 @@ export default function ShoppingListPage() {
         isVisible={modalVisible}
         onBackdropPress={() => setModalVisible(false)}
         onSwipeComplete={() => setModalVisible(false)}
-        // swipe up to show bigger and down for close
         swipeDirection="down"
         style={styles.modal}
         backdropOpacity={0.3}
@@ -433,7 +471,6 @@ export default function ShoppingListPage() {
           <View style={styles.modalHandle} />
           <View style={{ flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', marginBottom: 18 }}>
             <Text style={styles.modalTitle}>מה בא לך היום?</Text>
-            {/* animation should be size controled in percentage */}
             <LottieView source={require('../../assets/cart-add.json')} autoPlay loop style={{ width: '15%', height: '120%', marginLeft: 8, marginRight: 5, marginTop: 0, marginBottom: 22 }} />
           </View>
           {/* Message area inside modal */}
@@ -442,23 +479,36 @@ export default function ShoppingListPage() {
               <Text style={styles.snackText}>{snack}</Text>
             </View>
           )}
-          <TextInput
-            style={styles.input}
-            placeholder="שם פריט"
-            value={addName}
-            onChangeText={setAddName}
-            autoFocus
-            returnKeyType="next"
-          />
-          {modalVisible && suggestions.length > 0 && (
-            <View style={styles.suggestionList}>
-              {suggestions.map(s => (
-                <TouchableOpacity key={s} onPress={() => setAddName(s)} style={styles.suggestionItem}>
-                  <Text style={styles.suggestionText}>{s}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
+          <View style={{ zIndex: 10 }}>
+            <TextInput
+              style={styles.input}
+              placeholder="שם פריט"
+              value={addName}
+              onChangeText={text => {
+                setAddName(text);
+                setShowNameSuggestions(true);
+              }}
+              autoFocus
+              returnKeyType="next"
+              onFocus={() => setShowNameSuggestions(true)}
+              onBlur={() => setTimeout(() => setShowNameSuggestions(false), 120)}
+              // hide suggestions after blur (with delay for tap)
+            />
+            {modalVisible && suggestions.length > 0 && showNameSuggestions && (
+              <View style={[styles.suggestionList, styles.suggestionListEnhanced]}> 
+                <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: 140 }}>
+                  {suggestions.map(s => (
+                    <TouchableOpacity key={s} onPress={() => {
+                      setAddName(s);
+                      setShowNameSuggestions(false);
+                    }} style={styles.suggestionItem}>
+                      <Text style={styles.suggestionText} numberOfLines={1} ellipsizeMode="tail">{s}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+          </View>
           <TextInput
             style={styles.input}
             placeholder="כמות"
@@ -466,24 +516,44 @@ export default function ShoppingListPage() {
             onChangeText={setAddQuantity}
             keyboardType="numeric"
             returnKeyType="next"
-            onFocus={() => { if (addQuantity === '1') setAddQuantity(''); }}
+            onFocus={() => {
+              if (addQuantity === '1') setAddQuantity('');
+              setShowNameSuggestions(false);
+              setShowCategorySuggestions(false);
+            }}
+            onBlur={() => {
+              setShowNameSuggestions(false);
+              setShowCategorySuggestions(false);
+            }}
           />
-          <TextInput
-            style={styles.input}
-            placeholder="קטגוריה"
-            value={addCategory}
-            onChangeText={setAddCategory}
-            returnKeyType="done"
-          />
-          {modalVisible && categorySuggestions.length > 0 && (
-            <View style={styles.suggestionList}>
-              {categorySuggestions.map(c => (
-                <TouchableOpacity key={c} onPress={() => setAddCategory(c)} style={styles.suggestionItem}>
-                  <Text style={styles.suggestionText}>{c}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
+          <View style={{ zIndex: 9 }}>
+            <TextInput
+              style={styles.input}
+              placeholder="קטגוריה"
+              value={addCategory}
+              onChangeText={text => {
+                setAddCategory(text);
+                setShowCategorySuggestions(true);
+              }}
+              returnKeyType="done"
+              onFocus={() => setShowCategorySuggestions(true)}
+              onBlur={() => setTimeout(() => setShowCategorySuggestions(false), 120)}
+            />
+            {modalVisible && categorySuggestions.length > 0 && showCategorySuggestions && (
+              <View style={[styles.suggestionList, styles.suggestionListEnhanced]}> 
+                <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: 140 }}>
+                  {categorySuggestions.map(c => (
+                    <TouchableOpacity key={c} onPress={() => {
+                      setAddCategory(c);
+                      setShowCategorySuggestions(false);
+                    }} style={styles.suggestionItem}>
+                      <Text style={styles.suggestionText} numberOfLines={1} ellipsizeMode="tail">{c}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+          </View>
           <TouchableOpacity
             style={[styles.addButton, (!addName.trim() || !addCategory.trim() || !addQuantity) && { opacity: 0.5 }]}
             onPress={handleAddItem}
@@ -514,24 +584,49 @@ function ListItemRow({ item, onToggleDone, onDelete, onUpdateQuantity }: { item:
   const translateX = useRef(new Animated.Value(0)).current;
   const [dismissed, setDismissed] = useState(false);
 
+  // Always use #506c4fff for swipe background (both directions)
+  const bgColor = translateX.interpolate({
+    inputRange: [-500, -120, 0, 120, 500],
+    outputRange: ['#506c4fff', '#506c4fff', '#fffdefff', '#506c4fff', '#506c4fff'],
+    extrapolate: 'clamp',
+  });
+
+  // Opacity and position for delete text (show for both left and right swipe, reveal earlier)
+  const deleteTextOpacity = translateX.interpolate({
+    inputRange: [-50, -20, 0, 20, 50],
+    outputRange: [1, 0, 0, 0, 1],
+    extrapolate: 'clamp',
+  });
+  const deleteTextTranslate = translateX.interpolate({
+    inputRange: [-50, 0, 50],
+    outputRange: [0, 32, 0],
+    extrapolate: 'clamp',
+  });
+
   const panResponder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dx) > 10,
       onPanResponderMove: (_, gestureState) => {
-        if (gestureState.dx > 0) {
-          translateX.setValue(gestureState.dx);
-        }
+        // Allow both left and right swipe
+        translateX.setValue(gestureState.dx);
       },
       onPanResponderRelease: (_, gestureState) => {
-        if (gestureState.dx > 120) {
+        if (gestureState.dx < -120) {
+          // Swiped left for delete
           Animated.timing(translateX, {
-            toValue: 500,
+            toValue: -500,
             duration: 200,
             useNativeDriver: true,
           }).start(() => {
             setDismissed(true);
             onDelete(item.id);
           });
+        } else if (gestureState.dx > 120) {
+          // Optionally keep right swipe for future actions, or just snap back
+          Animated.spring(translateX, {
+            toValue: 0,
+            useNativeDriver: true,
+          }).start();
         } else {
           Animated.spring(translateX, {
             toValue: 0,
@@ -553,43 +648,85 @@ function ListItemRow({ item, onToggleDone, onDelete, onUpdateQuantity }: { item:
   if (dismissed) return null;
 
   return (
-    <Animated.View
-      style={[
-        styles.listItemRow,
-        item.done && styles.listItemDone,
-        flashItemId === item.id && flashOn && styles.flashHighlight,
-        { transform: [{ translateX }] },
-      ]}
-      {...panResponder.panHandlers}
-      pointerEvents={item.done ? 'auto' : 'auto'}
-    >
-      <Pressable onPress={() => onToggleDone(item.id, !item.done)} style={styles.checkboxContainer}>
-        <Ionicons
-          name={item.done ? "checkbox" : "square-outline"}
-          size={24}
-          color={item.done ? "#506c4fff" : "#999"}
-        />
-      </Pressable>
-      <View style={styles.itemDetails}>
-        <Text style={[styles.itemName, item.done && styles.itemDoneText]}>
-          {item.name}
-        </Text>
-      </View>
-      <View style={item.done ? styles.actionsContainerDisabled : styles.actionsContainer}>
-        <View style={styles.quantityContainer}>
-          <Pressable onPress={() => onUpdateQuantity(item.id, item.quantity + 1)} disabled={item.done}>
-            <Ionicons name="add-circle-outline" size={24} color={item.done ? '#ccc' : '#506c4fff'} />
-          </Pressable>
-          <Text style={[styles.itemQuantity, item.done && styles.itemDoneText]}>{item.quantity}</Text>
-          <Pressable onPress={() => onUpdateQuantity(item.id, Math.max(1, item.quantity - 1))} disabled={item.done}>
-            <Ionicons name="remove-circle-outline" size={24} color={item.done ? '#ccc' : '#506c4fff'} />
+    <View style={{ position: 'relative', justifyContent: 'center', alignItems: 'stretch' }}>
+      {/* Delete text overlays behind the card, centered vertically */}
+      {/* Left side (swipe left) */}
+      <Animated.View
+        pointerEvents="none"
+        style={{
+          position: 'absolute',
+          left: 18,
+          top: '50%',
+          transform: [
+            { translateY: -14 }, // half the height of icon+text (approx)
+            { translateX: deleteTextTranslate }
+          ],
+          flexDirection: 'row',
+          opacity: deleteTextOpacity,
+          zIndex: 1,
+        }}
+      >
+        <Ionicons name="trash-outline" size={22} color="#506c4fff" style={{ marginRight: 6 }} />
+        <Text style={{ color: '#506c4fff', fontWeight: 'bold', fontSize: 16 }}>מחק פריט</Text>
+      </Animated.View>
+      {/* Right side (swipe right) */}
+      <Animated.View
+        pointerEvents="none"
+        style={{
+          position: 'absolute',
+          right: 18,
+          top: '50%',
+          transform: [
+            { translateY: -14 },
+            { translateX: Animated.multiply(deleteTextTranslate, -1) }
+          ],
+          flexDirection: 'row-reverse',
+          opacity: deleteTextOpacity,
+          zIndex: 1,
+        }}
+      >
+        <Ionicons name="trash-outline" size={22} color="#506c4fff" style={{ marginLeft: 6 }} />
+        <Text style={{ color: '#506c4fff', fontWeight: 'bold', fontSize: 16 }}>מחק פריט</Text>
+      </Animated.View>
+      {/* Foreground card */}
+      <Animated.View
+        style={[
+          styles.listItemRow,
+          item.done && styles.listItemDone,
+          flashItemId === item.id && styles.flashHighlight,
+          { transform: [{ translateX }], backgroundColor: bgColor, zIndex: 2 },
+        ]}
+        {...panResponder.panHandlers}
+        pointerEvents={item.done ? 'auto' : 'auto'}
+      >
+        <Pressable onPress={() => onToggleDone(item.id, !item.done)} style={styles.checkboxContainer}>
+          <Ionicons
+            name={item.done ? "checkbox" : "square-outline"}
+            size={24}
+            color={item.done ? "#506c4fff" : "#999"}
+          />
+        </Pressable>
+        <View style={styles.itemDetails}>
+          <Text style={[styles.itemName, item.done && styles.itemDoneText]}>
+            {item.name}
+          </Text>
+        </View>
+        <View style={item.done ? styles.actionsContainerDisabled : styles.actionsContainer}>
+          <View style={styles.quantityContainer}>
+            <Pressable onPress={() => onUpdateQuantity(item.id, item.quantity + 1)} disabled={item.done}>
+              <Ionicons name="add-circle-outline" size={24} color={item.done ? '#ccc' : '#506c4fff'} />
+            </Pressable>
+            <Text style={[styles.itemQuantity, item.done && styles.itemDoneText]}>{item.quantity}</Text>
+            <Pressable onPress={() => onUpdateQuantity(item.id, Math.max(1, item.quantity - 1))} disabled={item.done}>
+              <Ionicons name="remove-circle-outline" size={24} color={item.done ? '#ccc' : '#506c4fff'} />
+            </Pressable>
+          </View>
+          <Pressable onPress={() => onDelete(item.id)} disabled={item.done}>
+            <Ionicons name="trash-outline" size={24} color={item.done ? '#eee' : '#B91C1C'} />
           </Pressable>
         </View>
-        <Pressable onPress={() => onDelete(item.id)} disabled={item.done}>
-          <Ionicons name="trash-outline" size={24} color={item.done ? '#eee' : '#B91C1C'} />
-        </Pressable>
-      </View>
-    </Animated.View>
+      </Animated.View>
+    </View>
   );
 }
 
@@ -756,21 +893,47 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   suggestionList: {
-    backgroundColor: '#fffdefff',
-    borderRadius: 8,
+    backgroundColor: '#e2c96b',
+    borderRadius: 10,
     marginBottom: 10,
     paddingVertical: 4,
     paddingHorizontal: 8,
-    elevation: 1,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#e2c96b',
+    shadowColor: '#e2c96b',
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    maxHeight: 120,
+    minWidth: 120,
+    maxWidth: '98%',
+    alignSelf: 'center',
+    overflow: 'hidden',
+  },
+  suggestionListEnhanced: {
+    position: 'absolute',
+    top: 52,
+    left: '1%',
+    borderRadius: 10,
+    right: '1%',
+    zIndex: 100,
+    maxWidth: '98%',
+    alignSelf: 'center',
   },
   suggestionItem: {
-    paddingVertical: 6,
-    paddingHorizontal: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3e6b3',
+    backgroundColor: '#fffdefff',
   },
   suggestionText: {
-    fontSize: 15,
-    color: '#506c4fff',
+    fontSize: 16,
+    color: '#b08a00',
     textAlign: 'right',
+    fontWeight: '600',
+    maxWidth: '98%',
   },
   addButton: {
     backgroundColor: '#506c4fff',
