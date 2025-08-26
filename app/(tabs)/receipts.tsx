@@ -195,7 +195,7 @@ export default function ReceiptsPage() {
 
   // Handle FAB press
   const handleFabPress = useCallback(async () => {
-    console.log("FAB pressed");
+    // console.log("FAB pressed");
 
     if (Platform.OS === "android" && isExpoGo) {
       Alert.alert(
@@ -227,7 +227,7 @@ export default function ReceiptsPage() {
               (count: number, smsList: string) => {
                 try {
                   const arr = JSON.parse(smsList);
-                  console.log('OSHERAD SMS messages:', arr);
+                  // console.log('OSHERAD SMS messages:', arr);
                   // Find the most recent message with a link to osher.pairzone.com
                   let found = null;
                   for (const sms of arr) {
