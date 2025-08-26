@@ -285,7 +285,7 @@ export default function SettingsPage() {
         activeOpacity={0.8}
       >
         <LottieView
-          source={require('../../assets/FAB-animation.json')}
+          source={require('../../assets/settings.json')}
           autoPlay
           loop
           style={{ width: '100%', height: '100%' }}
@@ -461,7 +461,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 28,
     right: 28,
-    backgroundColor: '#506c4fff',
+    backgroundColor: '#f7f5e0ff',
     width: 64,
     height: 64,
     borderRadius: 32,
