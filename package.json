@@ -8,6 +8,7 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
+     "sync-native": "expo prebuild --clean",
     "test": "jest --watchAll",
     "clean": "rimraf node_modules package-lock.json android/.cxx android/build .gradle"
   },
