@@ -1,13 +1,15 @@
 {
-  "name": "zenlist-mobile-app",
-  "main": "expo-router/entry",
+  "name": "zenlist",
   "version": "1.0.0",
+  "private": true,
+  "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "web": "expo start --web",
-    "test": "jest --watchAll"
+    "test": "jest --watchAll",
+    "clean": "rimraf node_modules package-lock.json android/.cxx android/build .gradle"
   },
   "jest": {
     "preset": "jest-expo"
@@ -15,21 +17,22 @@
   "dependencies": {
     "@expo/metro-runtime": "~5.0.4",
     "@expo/vector-icons": "^14.1.0",
-    "@lottiefiles/dotlottie-react": "^0.6.5",
     "@react-navigation/native": "^7.1.6",
-    "expo": "~53.0.20",
+    "expo": "53.0.22",
+    "expo-constants": "~17.1.7",
+    "expo-dev-client": "^5.2.4",
     "expo-file-system": "~18.1.11",
     "expo-font": "~13.3.2",
     "expo-linking": "~7.1.7",
-    "expo-router": "~5.1.4",
+    "expo-router": "~5.1.5",
     "expo-sharing": "~13.1.5",
     "expo-sms": "~13.1.4",
     "expo-splash-screen": "~0.30.10",
     "expo-status-bar": "~2.2.3",
-    "expo-system-ui": "~5.0.10",
+    "expo-system-ui": "~5.0.11",
     "expo-web-browser": "~14.2.0",
     "lottie-react-native": "7.2.2",
-    "react": "^19.0.0",
+    "react": "19.0.0",
     "react-dom": "19.0.0",
     "react-native": "0.79.5",
     "react-native-get-sms-android": "^2.1.0",
@@ -44,9 +47,9 @@
     "@babel/core": "^7.25.2",
     "@types/react": "~19.0.10",
     "jest": "^29.2.1",
-    "jest-expo": "~53.0.9",
+    "jest-expo": "~53.0.10",
     "react-test-renderer": "19.0.0",
+    "rimraf": "^5.0.5",
     "typescript": "~5.8.3"
-  },
-  "private": true
+  }
 }
