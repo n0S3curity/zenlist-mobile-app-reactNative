@@ -27,7 +27,7 @@
         <category android:name="android.intent.category.DEFAULT"/>
         <category android:name="android.intent.category.BROWSABLE"/>
         <data android:scheme="zenlistmobileapp"/>
-        <data android:scheme="exp+zenlist"/>
+        <data android:scheme="exp+zenlist-mobile-app"/>
       </intent-filter>
     </activity>
   </application>
