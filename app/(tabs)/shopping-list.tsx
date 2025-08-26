@@ -455,7 +455,7 @@ export default function ShoppingListPage() {
         onPress={() => setModalVisible(true)}
         activeOpacity={0.8}
       >
-        <LottieView source={require('../../assets/FAB-animation.json')} autoPlay loop style={{ width: '100%', height: '100%' }} />
+        <LottieView source={require('../../assets/cart-add.json')} autoPlay loop style={{ width: '100%', height: '100%' }} />
       </TouchableOpacity>
       {/* Modal */} 
       <Modal
@@ -839,7 +839,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 28,
     right: 28,
-    backgroundColor: '#506c4fff',
+    backgroundColor: '#e7db51ff',
     width: 64,
     height: 64,
     borderRadius: 32,

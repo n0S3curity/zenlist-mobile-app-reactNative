@@ -20,7 +20,7 @@ import {
 import Constants from "expo-constants";
 // Correct import for react-native-get-sms-android
 import SmsAndroid from 'react-native-get-sms-android';
-import FABAnim from "../../assets/FAB-animation.json";
+import FABAnim from "../../assets/receipts-navbar-animation.json";
 import { Ionicons } from "@expo/vector-icons";
 import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
@@ -683,7 +683,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     bottom: 28,
     right: 28,
-    backgroundColor: "#506c4fff",
+    backgroundColor: "#e7db51ff",
     width: 64,
     height: 64,
     borderRadius: 32,

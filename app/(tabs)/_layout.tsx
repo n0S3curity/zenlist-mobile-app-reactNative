@@ -13,7 +13,7 @@ function TabTransitionAnimation({ visible, onFinish }) {
       animationRef.current.play();
       const timeout = setTimeout(() => {
         onFinish();
-      }, 100);
+      }, 1100);
       return () => clearTimeout(timeout);
     }
   }, [visible]);
@@ -61,22 +61,15 @@ export default function TabLayout() {
                 const { options } = descriptors[route.key];
                 const label = options.tabBarLabel ?? options.title ?? route.name;
                 const isFocused = state.index === index;
-                let icon = options.tabBarIcon ? options.tabBarIcon({ color: isFocused ? '#007aff' : '#222', focused: isFocused, size: 24 }) : null;
-                if (route.name === 'shopping-list') {
-                  icon = (
-                    <LottieView
-                      source={require('../../assets/cart-navbar-animation.json')}
-                      autoPlay
-                      loop
-                      style={{ width: 32, height: 32 }}
-                    />
-                  );
-                }
-                
+                // If focused then make it a little bigger and move up the text and icon
+                let iconSize = isFocused ? 32 : 26;
+                let icon = options.tabBarIcon ? options.tabBarIcon({ color: isFocused ? '#506c4fff' : '#222', focused: isFocused, size: iconSize }) : null;
+                let translateY = isFocused ? -8 : 0;
+                let fontSize = isFocused ? 15 : 12;
                 return (
                   <View key={route.key} style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
                     <Pressable
-                      style={{ alignItems: 'center', justifyContent: 'center', width: '100%' }}
+                      style={{ alignItems: 'center', justifyContent: 'center', width: '100%', transform: [{ translateY }] }}
                       onPress={() => {
                         if (!isFocused) {
                           setShowAnim(true);
@@ -85,7 +78,7 @@ export default function TabLayout() {
                       }}
                     >
                       {icon}
-                      <Text style={{ color: isFocused ? '#007aff' : '#222', fontSize: 12, marginTop: 4 }}>{label}</Text>
+                      <Text style={{ color: isFocused ? '#506c4fff' : '#222', fontSize, marginTop: 4, fontWeight: isFocused ? '700' : '400' }}>{typeof label === 'string' ? label : ''}</Text>
                     </Pressable>
                   </View>
                 );
@@ -111,7 +104,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="statistics"
         options={{
-          title: 'סטטיסטיקות',
+          title: 'נתונים',
           tabBarIcon: ({ color }) => <Ionicons name="stats-chart-outline" size={24} color={color} />,
         }}
       />
@@ -128,7 +121,7 @@ export default function TabLayout() {
         name="shopping-list"
         options={{
           title: 'רשימה',
-          tabBarIcon: ({ color }) => <Ionicons name="cart-outline" size={24} color={color} />,
+          tabBarIcon: ({ color }) => <Ionicons name="cart-outline" size={26} color={color} />,
         }}
       />
       <Tabs.Screen
