@@ -18,11 +18,8 @@ import {
   PermissionsAndroid,
 } from "react-native";
 import Constants from "expo-constants";
-// NativeModules for SMS reading
-import { NativeModules } from "react-native";
-
-// For Android SMS reading
-const SmsAndroid = NativeModules.SmsAndroid;
+// Correct import for react-native-get-sms-android
+import SmsAndroid from 'react-native-get-sms-android';
 import FABAnim from "../../assets/FAB-animation.json";
 import { Ionicons } from "@expo/vector-icons";
 import * as FileSystem from "expo-file-system";
@@ -55,10 +52,10 @@ function normalizeToMidnight(d: Date) {
 
 function getDayLabel(iso: string) {
   const today = normalizeToMidnight(new Date());
-  const yest  = normalizeToMidnight(new Date(Date.now() - 24 * 60 * 60 * 1000));
+  const yest = normalizeToMidnight(new Date(Date.now() - 24 * 60 * 60 * 1000));
   const d = normalizeToMidnight(new Date(iso));
   if (d.getTime() === today.getTime()) return "היום";
-  if (d.getTime() === yest.getTime())  return "אתמול";
+  if (d.getTime() === yest.getTime()) return "אתמול";
   return new Date(iso).toLocaleDateString("he-IL", {
     weekday: "long",
     day: "numeric",
@@ -106,8 +103,9 @@ export default function ReceiptsPage() {
   const [foundLinks, setFoundLinks] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // For showing the most recent OSHERAD SMS
-  const [recentOsheradSms, setRecentOsheradSms] = useState<string | null>(null);
+  // For showing the most recent OSHERAD SMS link
+  const [recentOsheradLink, setRecentOsheradLink] = useState<null | { link: string; date: string }>(null);
+  const [recentYochananofLink, setRecentYochananofLink] = useState<null | { link: string; date: string }>(null);
 
   // Expo Go vs Dev/Standalone
   const isExpoGo = Constants.appOwnership === "expo";
@@ -144,9 +142,9 @@ export default function ReceiptsPage() {
 
       if (!response.ok) {
         if (responseBody.includes("already exists")) {
-          errorMessage = "הקישור כבר קיים במערכת";
+          errorMessage = "הקבלה כבר קיימת במערכת";
         } else {
-          errorMessage = `שגיאה בשרת: ${response.status}`;
+          errorMessage = `שגיאה בשרת: ${response.status}\n ${responseBody}`;
         }
         throw new Error(errorMessage);
       }
@@ -214,40 +212,78 @@ export default function ReceiptsPage() {
       } else {
         // Try to read SMS from OSHERAD
         try {
-          if (SmsAndroid && SmsAndroid.list) {
+          if (SmsAndroid && typeof SmsAndroid.list === 'function') {
             console.log("Attempting to read SMS from OSHERAD...");
             SmsAndroid.list(
               JSON.stringify({
                 box: 'inbox',
                 address: 'OSHERAD',
-                maxCount: 10,
+                maxCount: 20,
               }),
               (fail: any) => {
                 console.log('Failed to read SMS:', fail);
-                setRecentOsheradSms(null);
+                setRecentOsheradLink(null);
               },
               (count: number, smsList: string) => {
                 try {
                   const arr = JSON.parse(smsList);
                   console.log('OSHERAD SMS messages:', arr);
-                  if (arr && arr.length > 0) {
-                    setRecentOsheradSms(arr[0].body);
+                  // Find the most recent message with a link to osher.pairzone.com
+                  let found = null;
+                  for (const sms of arr) {
+                    const links = extractLinks(sms.body || "");
+                    const osherLink = links.find(l => l.includes("osher.pairzon.com"));
+                    if (osherLink) {
+                      found = { link: osherLink, date: sms.date }; // sms.date is ms since epoch
+                      break;
+                    }
+                  }
+                  if (found) {
+                    setRecentOsheradLink(found);
                   } else {
-                    setRecentOsheradSms(null);
+                    setRecentOsheradLink(null);
                   }
                 } catch (e) {
                   console.log('Error parsing SMS list:', e);
-                  setRecentOsheradSms(null);
+                  setRecentOsheradLink(null);
+                }
+              }
+            );
+            // Yochananof
+            SmsAndroid.list(
+              JSON.stringify({
+                box: 'inbox',
+                address: 'Yochananof',
+                maxCount: 20,
+              }),
+              (fail: any) => {
+                setRecentYochananofLink(null);
+              },
+              (count: number, smsList: string) => {
+                try {
+                  const arr = JSON.parse(smsList);
+                  let found = null;
+                  for (const sms of arr) {
+                    const links = extractLinks(sms.body || "");
+                    const YochananofLink = links.find(l => l.includes("wee.ai"));
+                    if (YochananofLink) {
+                      found = { link: YochananofLink, date: sms.date };
+                      break;
+                    }
+                  }
+                  setRecentYochananofLink(found || null);
+                } catch (e) {
+                  setRecentYochananofLink(null);
                 }
               }
             );
           } else {
             console.log('SmsAndroid.list not available');
-            setRecentOsheradSms(null);
+            setRecentOsheradLink(null);
           }
         } catch (e) {
           console.log('Exception reading SMS:', e);
-          setRecentOsheradSms(null);
+          setRecentOsheradLink(null);
         }
       }
     }
@@ -444,16 +480,59 @@ export default function ReceiptsPage() {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            {/* Show most recent OSHERAD SMS if available */}
-            {recentOsheradSms && (
-              <View style={{ marginBottom: 12, backgroundColor: '#f5f5f5', borderRadius: 8, padding: 10 }}>
-                <Text style={{ color: '#506c4fff', fontWeight: '700', marginBottom: 4 }}>הודעה אחרונה מ-OSHERAD:</Text>
-                <Text style={{ color: '#333', fontSize: 15 }}>{recentOsheradSms}</Text>
-              </View>
+            {/* Show most recent OSHERAD link if available */}
+            {recentOsheradLink && (
+              <TouchableOpacity
+                style={{ marginBottom: 10, backgroundColor: '#f5f5f5', borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', minHeight: 40 }}
+                onPress={() => submitLink(recentOsheradLink.link)}
+                disabled={isSubmitting}
+                activeOpacity={0.85}
+              >
+
+                <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%', justifyContent: 'space-between' }}>
+                  <View style={[styles.badge, { backgroundColor: '#E8E8E8', marginBottom: 0, marginTop: 0, paddingVertical: 4, paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', marginRight: 0 }]}>
+                    <Ionicons name="time-outline" size={14} color="#506c4fff" style={{ marginLeft: 4 }} />
+                    <Text style={{ color: '#506c4fff', fontWeight: 'bold', fontSize: 13 }}>
+                      {(() => {
+                        const d = new Date(Number(recentOsheradLink.date));
+                        return d.toLocaleDateString('he-IL', { year: 'numeric', month: '2-digit', day: '2-digit' }) + ' ' + d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+                      })()}
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1 }} />
+                  <Text style={{ color: '#506c4fff', fontWeight: '700', fontSize: 15, textAlign: 'left' }}>אושר עד</Text>
+                  {isSubmitting && <ActivityIndicator size="small" color="#506c4fff" style={{ marginLeft: 8 }} />}
+                </View>
+              </TouchableOpacity>
+
             )}
-            <Text style={styles.modalTitle}>הדבק הודעה מ-OSHERAD</Text>
+            {recentYochananofLink && (
+              <TouchableOpacity
+                style={{ marginBottom: 10, backgroundColor: '#f5f5f5', borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', minHeight: 40 }}
+                onPress={() => submitLink(recentYochananofLink.link)}
+                disabled={isSubmitting}
+                activeOpacity={0.85}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%', justifyContent: 'space-between' }}>
+                  <View style={[styles.badge, { backgroundColor: '#E8E8E8', marginBottom: 0, marginTop: 0, paddingVertical: 4, paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', marginRight: 0 }]}>
+                    <Ionicons name="time-outline" size={14} color="#506c4fff" style={{ marginLeft: 4 }} />
+                    <Text style={{ color: '#506c4fff', fontWeight: 'bold', fontSize: 13 }}>
+                      {(() => {
+                        const d = new Date(Number(recentYochananofLink.date));
+                        return d.toLocaleDateString('he-IL', { year: 'numeric', month: '2-digit', day: '2-digit' }) + ' ' + d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+                      })()}
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1 }} />
+                  <Text style={{ color: '#506c4fff', fontWeight: '700', fontSize: 15, textAlign: 'left' }}>יוחננוף</Text>
+                  {isSubmitting && <ActivityIndicator size="small" color="#506c4fff" style={{ marginLeft: 8 }} />}
+                </View>
+              </TouchableOpacity>
+            )}
+            <Text style={styles.modalTitle}>בחר את הקבלה האחרונה שקיבלת מהרשימה</Text>
+
             {permissionError ? <Text style={styles.permissionError}>{permissionError}</Text> : null}
-            <TextInput
+            {/* <TextInput
               style={styles.bigTextBox}
               multiline
               value={textValue}
@@ -461,7 +540,7 @@ export default function ReceiptsPage() {
               placeholder="הדבק כאן את ההודעה..."
               editable={!isSubmitting}
               textAlign="right"
-            />
+            /> */}
             {foundLinks.length > 0 && (
               <ScrollView style={styles.linksList}>
                 {foundLinks.map((link, index) => (
