@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "zenlist",
-    "slug": "zenlist",
+    "slug": "zenlist-mobile-app",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/shopping-cart.png",
