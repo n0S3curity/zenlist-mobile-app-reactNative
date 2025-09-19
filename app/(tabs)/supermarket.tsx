@@ -27,8 +27,12 @@ type SupermarketItem = {
   ItemPrice?: string | number;
   promo?: {
     DiscountedPrice: string | number;
+    DiscountedPricePerMida?: string | number; // <-- add this line
     MinQty: string | number;
     PromotionDescription?: string;
+    PromotionEndDate?: string;
+    PromotionId?: string;
+    PromotionUpdateDate?: string;
   };
   Promo?: {
     Quantity: number;
@@ -104,6 +108,7 @@ export default function SupermarketPage() {
               DiscountedPrice: item.promo.DiscountedPrice,
               MinQty: item.promo.MinQty,
               PromotionDescription: item.promo.PromotionDescription,
+              DiscountedPricePerMida: item.promo.DiscountedPricePerMida,
               PromotionEndDate: item.promo.PromotionEndDate,
             };
           }
@@ -221,7 +226,7 @@ export default function SupermarketPage() {
               <Text style={styles.modalLabel}>
                 {/* show nothing else */}
               </Text>
-              <Text style={[styles.modalLabel, { marginTop: 12, fontWeight: "bold" }]}>מחירים בכל סופרמרקט:</Text>
+              <Text style={[styles.modalLabel, { marginTop: 12, fontWeight: "bold" }]}>פרטים</Text>
               {selectedOffers.map((offer, idx) => (
                 <ModalOfferRow offer={offer} key={offer.supermarket + offer.branch + idx} />
               ))}
@@ -265,22 +270,24 @@ function SupermarketCard({
     });
   }
 
-  // Find the cheapest price for marking
-  let cheapestPrice = null;
-  if (offers.length > 1) {
-    cheapestPrice = Math.min(
-      ...offers.map(
-        (o) =>
-          o.promo && o.promo.DiscountedPrice
-            ? Number(o.promo.DiscountedPrice)
-            : Number(o.item.ItemPrice) || 999999
+  // Calculate the cheapest price (after sorting)
+  const cheapestPrice = offers.length > 1
+    ? Math.min(
+        ...offers.map(
+          (o) =>
+            o.promo && o.promo.DiscountedPrice
+              ? Number(o.promo.DiscountedPrice)
+              : Number(o.item.ItemPrice) || 999999
+        )
       )
-    );
-  }
+    : null;
+
+  // For scrollable: reverse the sorted array so cheapest is rightmost
+  const displayOffers = isScrollable ? [...offers].reverse() : offers;
 
   const OffersContent = (
     <>
-      {offers.map((offer, idx) => {
+      {displayOffers.map((offer, idx) => {
         const priceNum = Number(
           offer.promo && offer.promo.DiscountedPrice
             ? offer.promo.DiscountedPrice
@@ -299,18 +306,32 @@ function SupermarketCard({
           : isScrollable
           ? { width: 160, minWidth: 140, maxWidth: 200 }
           : { flex: 1 / offers.length, minWidth: 0, maxWidth: `${100 / offers.length}%` };
+        // Center all content in the card
         return (
-          <View key={offer.supermarket + offer.branch + idx} style={[styles.offerFrame, widthStyle]}>
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end" }}>
-              <Text style={styles.offerSupermarket}>
-                {translateSupermarket(offer.supermarket)}
-                {offer.branch ? ` - ${offer.branch}` : ""}
-              </Text>
-              {isCheapest && (
-                <Text style={styles.cheapestTag}>הכי זול ⭐</Text>
-              )}
-            </View>
-            <View style={styles.pricePromoRow}>
+          <View
+            key={offer.supermarket + offer.branch + idx}
+            style={[
+              styles.offerFrame,
+              widthStyle,
+              { alignItems: "center", justifyContent: "center" },
+            ]}
+          >
+            {/* Supermarket name */}
+            <Text
+              style={[
+                styles.offerSupermarket,
+                { alignSelf: "flex-end", textAlign: "right" }
+              ]}
+            >
+              {translateSupermarket(offer.supermarket)}
+              {offer.branch ? ` - ${offer.branch}` : ""}
+            </Text>
+            {/* Cheapest tag under supermarket name */}
+            {isCheapest && (
+              <Text style={styles.cheapestTag}>הכי זול ⭐</Text>
+            )}
+            {/* Price row */}
+            <View style={[styles.pricePromoRow, { justifyContent: "center" }]}>
               <Text style={hasPromo ? styles.originalPrice : styles.offerPrice}>{price}</Text>
               {hasPromo && (
                 <Text style={styles.discountedPrice}>
@@ -318,15 +339,16 @@ function SupermarketCard({
                 </Text>
               )}
             </View>
+            {/* Promo frame */}
             {hasPromo && (
               <View style={styles.promoFrame}>
                 <Text style={styles.promoTitle}>במבצע</Text>
                 <Text style={styles.promoDetail}>
-                {offer.promo.PromotionDescription ?? "—"}
+                  {offer.promo.PromotionDescription ?? "—"}
                 </Text>
                 <Text style={styles.promoDetail}>
-                  שווי ליחידה: {offer.promo.DiscountedPrice ? nis.format(Number(offer.promo.DiscountedPrice)) : "—"}
-                </Text>
+  שווי ליחידה: {offer.promo.DiscountedPricePerMida ? nis.format(Number(offer.promo.DiscountedPricePerMida)) : "—"}
+</Text>
                 <Text style={styles.promoDetail}>
                   כמות: {offer.promo.MinQty ?? "—"}
                 </Text>
@@ -345,7 +367,7 @@ function SupermarketCard({
 
   return (
     <View style={styles.card}>
-      <View style={styles.cardContentBig}>
+      <View style={[styles.cardContentBig, { alignItems: "center" }]}>
         <Text style={styles.productName}>{item.ItemName ?? "—"}</Text>
         <Text style={styles.productMeta}>
           קוד פריט: {item.ItemCode ?? "—"}
@@ -364,7 +386,8 @@ function SupermarketCard({
           </ScrollView>
         ) : (
           <Pressable
-            style={[styles.offersRow, isSingle && { flexDirection: "row-reverse" }]}
+            style={[styles.offersRow, isSingle && { flexDirection: "row-reverse" }, { justifyContent: "center", alignItems: "center" }]
+            }
             onPress={onPress}
             android_ripple={{ color: "#e6f9e6" }}
           >
@@ -537,6 +560,7 @@ const styles = StyleSheet.create({
   productDetails: {
     flexDirection: 'column',
     alignItems: 'flex-end',
+     textAlign: 'right',
     gap: 2,
   },
   productName: {
@@ -586,7 +610,7 @@ const styles = StyleSheet.create({
     color: "#228B22",
     fontSize: 15,
     marginBottom: 2,
-    textAlign: "left",
+    textAlign: "right",
     flexShrink: 1,
   },
   pricePromoRow: {
@@ -643,7 +667,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#333",
     marginBottom: 6,
-    textAlign: "left",
+    textAlign: "right",
+    
   },
   modalValue: {
     fontWeight: "700",
@@ -662,7 +687,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
   },
   // --- Promo styles ---
-  promoFrame: {
+   promoFrame: {
     backgroundColor: "#e6f9e6",
     borderColor: "#34c759",
     borderWidth: 1,
@@ -670,7 +695,9 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     paddingHorizontal: 7,
     marginTop: 4,
-    alignSelf: "flex-end",
+       textAlign: "right",
+    alignItems: "flex-end",
+    alignSelf: "center", // <-- center the promo frame horizontally
   },
   promoFrameModal: {
     backgroundColor: "#e6f9e6",
@@ -693,7 +720,8 @@ const styles = StyleSheet.create({
   promoDetail: {
     color: "#228B22",
     fontSize: 12,
-    textAlign: "left",
+    textAlign: "right",
+    alignItems: "flex-end"
   },
   offerRow: {
     marginBottom: 10,
