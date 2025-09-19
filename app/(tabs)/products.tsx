@@ -371,6 +371,7 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     shadowOffset: { width: 0, height: 1 },
     elevation: 0.5,
+    
   },
   cardContent: {
     flexDirection: 'row-reverse', // Align items horizontally
