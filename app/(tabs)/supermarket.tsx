@@ -96,8 +96,8 @@ export default function SupermarketPage() {
     setError(null);
     setIsLoading(true);
     try {
-      // const res = await fetch("https://zenlist.hack-ops.net/api/prices");
-      const res = await fetch("http://192.168.3.23:5000/api/prices");
+      const res = await fetch("https://zenlist.hack-ops.net/api/prices");
+      // const res = await fetch("http://192.168.3.23:5000/api/prices");
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data: SupermarketPlace[] = await res.json();
 
