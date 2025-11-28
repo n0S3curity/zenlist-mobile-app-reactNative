@@ -1,7 +1,11 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, I18nManager } from 'react-native';
 import LottieView from 'lottie-react-native';
 import { useRouter } from 'expo-router';
+
+// Enable RTL for Hebrew
+I18nManager.allowRTL(false);
+I18nManager.forceRTL(false);
 
 export default function AnimatedSplashScreen() {
   const router = useRouter();
