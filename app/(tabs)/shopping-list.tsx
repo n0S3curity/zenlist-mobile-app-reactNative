@@ -31,6 +31,12 @@ type ListItem = {
   done: boolean;
 };
 
+// Type for the centralized message snackbar
+type SnackMessage = {
+  message: string;
+  type: 'success' | 'error';
+};
+
 // ---------- API Endpoint ----------
 const listApi = "https://zenlist.hack-ops.net/api/list";
 
@@ -43,11 +49,13 @@ export default function ShoppingListPage() {
   const [items, setItems] = useState<ListItem[]>([]);
 
   // UI feedback state
-  const [snack, setSnack] = useState<string | null>(null);
+  const [snack, setSnack] = useState<SnackMessage | null>(null);
   const snackTimer = useRef<NodeJS.Timeout | null>(null);
 
   // UI state for list sections
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
+  // State for tracking which categories are currently deleting
+  const [deletingCategories, setDeletingCategories] = useState<Set<string>>(new Set());
 
   // FAB/modal state
   const [modalVisible, setModalVisible] = useState(false);
@@ -61,6 +69,10 @@ export default function ShoppingListPage() {
   const [showCategorySuggestions, setShowCategorySuggestions] = useState(false);
   const [allSuggestions, setAllSuggestions] = useState<string[]>([]);
   const [allCategories, setAllCategories] = useState<string[]>([]);
+  const nameInputRef = useRef<TextInput>(null);
+  
+  // Overlay state for add animation
+  const [showAddAnim, setShowAddAnim] = useState(false);
 
   // Fetch suggestions/categories from API when modal opens
   useEffect(() => {
@@ -87,24 +99,17 @@ export default function ShoppingListPage() {
         setAllSuggestions([]);
         setAllCategories([]);
       });
-  }, [modalVisible]);
-
-  // Overlay state for add animation
-  const [showAddAnim, setShowAddAnim] = useState(false);
-
-  // Flash state for item highlight
-  const [flashItemId, setFlashItemId] = useState<string | null>(null);
-  const [flashOn, setFlashOn] = useState(false);
+  }, [modalVisible, allSuggestions.length, allCategories.length]);
 
   // Function to show a temporary snackbar message
-  const showSnack = useCallback((msg: string) => {
-    setSnack(msg);
+  const showSnack = useCallback((msg: string, type: 'success' | 'error' = 'error') => {
+    setSnack({ message: msg, type });
     if (snackTimer.current) clearTimeout(snackTimer.current);
     snackTimer.current = setTimeout(() => setSnack(null), 5200) as unknown as NodeJS.Timeout;
   }, []);
 
   // Function to fetch the shopping list from the API
-  const load = useCallback(async () => {
+  const load = useCallback(async (isInitialLoad = false) => {
     setError(null);
     try {
       const res = await fetch(listApi);
@@ -115,9 +120,12 @@ export default function ShoppingListPage() {
         (item): item is ListItem => typeof item === 'object' && item !== null && 'id' in item
       );
 
-      // Collapse all categories by default on load
-      const allCategories = new Set(itemsArray.map(item => item.category || 'כללי'));
-      setCollapsedCategories(allCategories);
+      // --- CRITICAL FIX: Only collapse all categories on the very first initial load ---
+      if (isInitialLoad) {
+          const allCategories = new Set(itemsArray.map(item => item.category || 'כללי'));
+          setCollapsedCategories(allCategories);
+      }
+      // ---------------------------------------------------------------------------------
 
       setItems(itemsArray);
     } catch (e: any) {
@@ -140,17 +148,23 @@ export default function ShoppingListPage() {
     setTimeout(() => {
       setShowRefreshLottie(false);
       setRefreshing(false);
-    }, 7000);
+    }, 1600); // Changed from 7000 to 1600 for better UX
   }, [load]);
 
   // Initial load effect
   useEffect(() => {
-    load();
+    load(true); // Pass true to collapse all on initial load
   }, [load]);
 
   // API call to toggle an item's 'done' status
-  const toggleItemDone = async (itemId: string, doneStatus: boolean) => {
+  const toggleItemDone = useCallback(async (itemId: string, doneStatus: boolean) => {
     const endpoint = doneStatus ? `${listApi}/done` : `${listApi}/undone`;
+    
+    // 1. Optimistic update (for immediate UI response)
+    setItems(prevItems => prevItems.map(item => 
+      item.id === itemId ? { ...item, done: doneStatus } : item
+    ));
+
     try {
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -158,24 +172,28 @@ export default function ShoppingListPage() {
         body: JSON.stringify({ itemID: String(itemId) })
       });
       if (response.ok) {
-        showSnack(`הפריט סומן כ${doneStatus ? 'בוצע' : 'לא בוצע'}.`);
-        await load();
-        // find and reopen the category was open
-        const item = items.find(item => item.id === itemId);
-        if (item) {
-          toggleCategory(item.category || '');
-        }
+        showSnack(`הפריט סומן כ${doneStatus ? 'בוצע' : 'לא בוצע'}`, 'success');
       } else {
         const result = await response.json();
         throw new Error(result.error || response.statusText);
       }
     } catch (error: any) {
-      showSnack(`שגיאה בשינוי סטטוס: ${error.message}`);
+      // 2. Rollback update and show error (only if API fails)
+      setItems(prevItems => prevItems.map(item => 
+        item.id === itemId ? { ...item, done: !doneStatus } : item
+      ));
+      showSnack(`שגיאה בשינוי סטטוס: ${error.message}`, 'error');
     }
-  };
+  }, [showSnack]);
 
   // API call to delete an item
-  const deleteItem = async (itemId: string) => {
+  const deleteItem = useCallback(async (itemId: string) => {
+    
+    // 1. Optimistic update
+    const itemToDelete = items.find(i => i.id === itemId);
+    const prevItems = items;
+    setItems(prevItems.filter(item => item.id !== itemId));
+
     try {
       const response = await fetch(`${listApi}/remove`, {
         method: 'POST',
@@ -183,24 +201,26 @@ export default function ShoppingListPage() {
         body: JSON.stringify({ itemID: String(itemId) })
       });
       if (response.ok) {
-        showSnack('הפריט הוסר מהרשימה.');
-        await load();
-        // find and reopen the category was open
-        const item = items.find(item => item.id === itemId);
-        if (item) {
-          toggleCategory(item.category || '');
-        }
       } else {
         const result = await response.json();
         throw new Error(result.error || response.statusText);
       }
     } catch (error: any) {
-      showSnack(`שגיאה בהסרת פריט: ${error.message}`);
+      // 2. Rollback and show error
+      if(itemToDelete) setItems(prevItems => [...prevItems, itemToDelete]);
+      showSnack(`שגיאה בהסרת פריט: ${error.message}`, 'error');
     }
-  };
+  }, [items, showSnack]);
 
   // API call to update an item's quantity
-  const updateItemQuantity = async (itemId: string, quantity: number) => {
+  const updateItemQuantity = useCallback(async (itemId: string, quantity: number) => {
+    
+    // 1. Optimistic update
+    const prevQuantity = items.find(i => i.id === itemId)?.quantity;
+    setItems(prevItems => prevItems.map(item => 
+      item.id === itemId ? { ...item, quantity: quantity } : item
+    ));
+
     try {
       const response = await fetch(`${listApi}/quantity`, {
         method: 'POST',
@@ -208,28 +228,29 @@ export default function ShoppingListPage() {
         body: JSON.stringify({ itemID: String(itemId), quantity })
       });
       if (response.ok) {
-        showSnack(`כמות הפריט עודכנה.`);
-        await load();
-        // find and reopen the category was open
-        const item = items.find(item => item.id === itemId);
-        if (item) {
-          toggleCategory(item.category || '');
-        }
+        showSnack(`כמות הפריט עודכנה ל-${quantity}.`, 'success');
       } else {
         const result = await response.json();
         throw new Error(result.error || response.statusText);
       }
     } catch (error: any) {
-      showSnack(`שגיאה בעדכון כמות: ${JSON.stringify({ itemID: String(itemId), quantity , error: error.message })}`);
+      // 2. Rollback and show error
+      if(prevQuantity !== undefined) setItems(prevItems => prevItems.map(item => 
+        item.id === itemId ? { ...item, quantity: prevQuantity! } : item
+      ));
+      showSnack(`שגיאה בעדכון כמות: ${error.message}`, 'error');
     }
-  };
-
-  // Add item handler (move above return)
-  const handleAddItem = async () => {
+  }, [items, showSnack]);
+  
+  // Add item handler
+    const handleAddItem = async (isAddMore: boolean) => {
     if (!addName.trim() || !addCategory.trim() || !addQuantity) return;
-    setAddLoading(true);
-    setModalVisible(false); // Close modal immediately
-    setShowAddAnim(true); // Show animation
+    if (!isAddMore){
+      setAddLoading(true);
+      setModalVisible(false);
+      setShowAddAnim(true);
+    }
+    
     try {
       const res = await fetch(`${listApi}/add`, {
         method: 'POST',
@@ -238,37 +259,33 @@ export default function ShoppingListPage() {
       });
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || 'שגיאה בהוספה');
-      setTimeout(async () => {
+      
+      // Since item ID is assigned by server, we MUST reload the entire list 
+      // to ensure the new item is present and sorted correctly.
+      await load(); 
+      
+      setTimeout(() => {
+        showSnack(`הפריט ${addName.trim()} נוסף בהצלחה.`, 'success');
         setShowAddAnim(false);
         setAddName('');
-        setAddQuantity('');
+        setAddQuantity('1');
         setAddCategory('');
-        await load();
       }, 1500);
+
     } catch (e: any) {
       setTimeout(() => {
         setShowAddAnim(false);
-        // Try to find the item by name
+        // Try to find the item by name (could be a false positive if duplicate check is complex)
         const found = items.find(i => i.name.trim() === addName.trim());
         if (found) {
-          toggleCategory(found.category || '');
-          setFlashItemId(found.id);
-          let flashes = 0;
-          const flashInterval = setInterval(() => {
-            setFlashOn(f => !f);
-            flashes++;
-            if (flashes > 7) {
-              clearInterval(flashInterval);
-              setFlashItemId(null);
-              setFlashOn(false);
-            }
-            //display snackbar message
-          }, 200);
+          // If a duplicate item is found, open its category for visibility.
+          toggleCategory(found.category || 'כללי');
         } else {
+          // If no item found, re-open modal to allow correction
           setModalVisible(true);
         }
         setAddLoading(false);
-        showSnack(e.message);
+        showSnack(e.message, 'error');
       }, 1500);
     } finally {
       setAddLoading(false);
@@ -293,15 +310,57 @@ export default function ShoppingListPage() {
         const done = grouped[category].filter(i => i.done);
         return {
           title: category,
-          data: [...notDone, ...done],
+          // Sort not-done items by name, then append done items
+          data: [...notDone.sort((a,b) => a.name.localeCompare(b.name)), ...done.sort((a,b) => a.name.localeCompare(b.name))],
           notDoneCount: notDone.length
         };
       })
+      // Sort sections by title
       .sort((a, b) => a.title.localeCompare(b.title));
   }, [items]);
 
+  // Handler to delete all items in a category
+  const deleteAllInCategory = useCallback(async (categoryTitle: string) => {
+    setDeletingCategories(prev => new Set(prev).add(categoryTitle));
+    
+    // 1. Optimistic UI update: Remove the whole category immediately
+    const prevItems = items;
+    setItems(prevItems.filter(item => (item.category || 'כללי') !== categoryTitle));
+
+    const itemsInCategory = prevItems.filter(item => (item.category || 'כללי') === categoryTitle);
+    
+    try {
+      for (const item of itemsInCategory) {
+        // Use a simple, non-optimistic delete request inside the loop
+        const response = await fetch(`${listApi}/remove`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ itemID: String(item.id) })
+        });
+        if (!response.ok) {
+           // On first failure, throw error to stop loop and rollback
+           throw new Error(`Failed to delete item ${item.name}`);
+        }
+        // Small delay between deletions for better UX
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+      showSnack(`הקטגוריה "${categoryTitle}" נמחקה בהצלחה.`, 'success');
+    } catch (e) {
+      // 2. Rollback UI on failure
+      setItems(prevItems); // Restore previous list state
+      showSnack(`שגיאה במחיקת קטגוריה: הקטגוריה לא נמחקה במלואה.`, 'error');
+    } finally {
+      setDeletingCategories(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(categoryTitle);
+        return newSet;
+      });
+    }
+
+  }, [items, showSnack]);
+
   // Handler to toggle category visibility
-  const toggleCategory = (categoryTitle: string) => {
+  const toggleCategory = useCallback((categoryTitle: string) => {
     setCollapsedCategories(prev => {
       const newSet = new Set(prev);
       if (newSet.has(categoryTitle)) {
@@ -311,9 +370,26 @@ export default function ShoppingListPage() {
       }
       return newSet;
     });
-  };
+  }, []);
 
-  const ListHeader = ({ totalItems }: { totalItems: number }) => (
+  // Toggle all categories open/closed
+  const toggleAllCategories = useCallback(() => {
+    setCollapsedCategories(prev => {
+      let newSet: Set<string>;
+      // if any collapsed -> open all (clear set)
+      if (prev.size > 0) {
+        newSet = new Set<string>();
+      }
+      // otherwise collapse all categories
+      else {
+        const all = new Set(categorizedItems.map(s => s.title));
+        newSet = all;
+      }
+      return newSet;
+    });
+  }, [categorizedItems, showSnack]);
+
+  const ListHeader = ({ totalItems, snack }: { totalItems: number, snack: SnackMessage | null }) => (
     <View style={styles.header}>
       <View style={styles.titleContainer}>
         <Text style={styles.title}>רשימת קניות</Text>
@@ -324,10 +400,24 @@ export default function ShoppingListPage() {
           style={{ width: 32, height: 32 }}
         />
       </View>
+      {/* Toggle all button */}
+      
       {totalItems > 0 && (
         <Text style={styles.totalItemsText}>
           סה"כ {totalItems} פריטים ברשימה
         </Text>
+      )}
+      <Pressable style={styles.toggleAllBtn} onPress={toggleAllCategories}>
+        <Text style={styles.toggleAllText}>
+          {collapsedCategories.size > 0 ? 'פתח הכל' : 'סגור הכל'}
+        </Text>
+      </Pressable>
+      
+      {/* NEW MESSAGE SNACKBAR LOCATION IN HEADER */}
+      {snack && (
+        <View style={[styles.headerMessage, snack.type === 'error' ? styles.snackErrorBg : styles.snackSuccessBg]}>
+          <Text style={styles.snackText}>{snack.message}</Text>
+        </View>
       )}
     </View>
   );
@@ -370,7 +460,7 @@ export default function ShoppingListPage() {
   if (isLoading || (isRefreshing && showRefreshLottie)) {
     return (
       <SafeAreaView style={styles.screen}>
-        <ListHeader totalItems={0} />
+        <ListHeader totalItems={0} snack={snack} />
         <View style={styles.center}>
           <LottieView
             source={require('../../assets/raise-animation.json')}
@@ -387,11 +477,11 @@ export default function ShoppingListPage() {
   if (error) {
     return (
       <SafeAreaView style={styles.screen}>
-        <ListHeader totalItems={0} />
+        <ListHeader totalItems={0} snack={snack} />
         <View style={styles.center}>
           <Ionicons name="cloud-offline-outline" size={40} color="#B91C1C" />
           <Text style={styles.errorText}>{error}</Text>
-          <Pressable style={styles.retryBtn} onPress={load}>
+          <Pressable style={styles.retryBtn} onPress={() => load(true)}> {/* Reload on error, collapse categories */}
             <Ionicons name="refresh" size={18} color="#fff" />
             <Text style={styles.retryBtnText}>רענן</Text>
           </Pressable>
@@ -403,7 +493,7 @@ export default function ShoppingListPage() {
   if (items.length === 0 && !isLoading) {
     return (
       <SafeAreaView style={styles.screen}>
-        <ListHeader totalItems={0} />
+        <ListHeader totalItems={0} snack={snack} />
         <View style={styles.center}>
           <Ionicons name="cart-outline" size={40} color="#506c4fff" />
           <Text style={styles.emptyTitle}>רשימת הקניות שלך ריקה!</Text>
@@ -415,32 +505,48 @@ export default function ShoppingListPage() {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <ListHeader totalItems={items.length} />
-      <FlashContext.Provider value={{ flashItemId, flashOn }}>
+      <ListHeader totalItems={items.length} snack={snack} />
         <SectionList
           contentContainerStyle={styles.listContent}
           sections={categorizedItems}
           keyExtractor={(item) => item.id}
           renderSectionHeader={({ section: { title, data, notDoneCount } }) => (
-            <Pressable onPress={() => toggleCategory(title)} style={styles.sectionHeader}>
-              <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 8 }}>
-                <Ionicons name={collapsedCategories.has(title) ? "chevron-down-outline" : "chevron-up-outline"} size={24} color="#333" />
-                <Text style={styles.sectionTitle}>{title}</Text>
-              </View>
-              <Text style={styles.sectionItemCount}>{notDoneCount} פריטים</Text>
-            </Pressable>
+            <View>
+              <Pressable onPress={() => toggleCategory(title)} style={styles.sectionHeader}>
+                <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 8 }}>
+                  <Ionicons name={collapsedCategories.has(title) ? "chevron-down-outline" : "chevron-up-outline"} size={24} color="#333" />
+                  <Text style={styles.sectionTitle}>{title}</Text>
+                </View>
+                <Text style={styles.sectionItemCount}>{notDoneCount} פריטים</Text>
+              </Pressable>
+              {/* Delete all button - only show when category is open */}
+              {!collapsedCategories.has(title) && notDoneCount > 0 && (
+                <Pressable 
+                  style={styles.deleteAllBtn}
+                  onPress={() => deleteAllInCategory(title)}
+                  disabled={deletingCategories.has(title)}
+                >
+                  <Ionicons name="trash-outline" size={16} color="#000" />
+                  <Text style={styles.deleteAllBtnText}>
+                    {deletingCategories.has(title) ? 'מוחק...' : 'מחק הכל'}
+                  </Text>
+                </Pressable>
+              )}
+            </View>
           )}
           renderItem={({ item, section, index }) => {
             const isVisible = !collapsedCategories.has(section.title);
             return (
               <AnimatedListItemRow
-                key={item.id + '-' + isVisible}
+                // Key no longer needs to change based on visibility, 
+                // as state changes won't trigger full reload.
+                key={item.id} 
                 item={item}
                 onToggleDone={toggleItemDone}
                 onDelete={deleteItem}
                 onUpdateQuantity={updateItemQuantity}
                 index={index}
-                visible={isVisible}
+                visible={isVisible} // Visibility is managed via state and prop
               />
             );
           }}
@@ -448,7 +554,6 @@ export default function ShoppingListPage() {
             <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor="transparent" />
           }
         />
-      </FlashContext.Provider>
       {/* FAB */}
       <TouchableOpacity
         style={styles.fab}
@@ -473,14 +578,15 @@ export default function ShoppingListPage() {
             <Text style={styles.modalTitle}>מה בא לך היום?</Text>
             <LottieView source={require('../../assets/cart-add.json')} autoPlay loop style={{ width: '15%', height: '120%', marginLeft: 8, marginRight: 5, marginTop: 0, marginBottom: 22 }} />
           </View>
-          {/* Message area inside modal */}
+          {/* Message area inside modal (Now uses conditional styling based on snack type) */}
           {modalVisible && snack && (
-            <View style={styles.modalMessage}>
-              <Text style={styles.snackText}>{snack}</Text>
+            <View style={[styles.modalMessage, snack.type === 'error' ? styles.snackErrorBg : styles.snackSuccessBg]}>
+              <Text style={styles.snackText}>{snack.message}</Text>
             </View>
           )}
-          <View style={{ zIndex: 10 }}>
+                    <View style={{ zIndex: 10 }}>
             <TextInput
+              ref={nameInputRef}
               style={styles.input}
               placeholder="שם פריט"
               value={addName}
@@ -492,7 +598,6 @@ export default function ShoppingListPage() {
               returnKeyType="next"
               onFocus={() => setShowNameSuggestions(true)}
               onBlur={() => setTimeout(() => setShowNameSuggestions(false), 120)}
-              // hide suggestions after blur (with delay for tap)
             />
             {modalVisible && suggestions.length > 0 && showNameSuggestions && (
               <View style={[styles.suggestionList, styles.suggestionListEnhanced]}> 
@@ -554,25 +659,36 @@ export default function ShoppingListPage() {
               </View>
             )}
           </View>
-          <TouchableOpacity
+                    <TouchableOpacity
             style={[styles.addButton, (!addName.trim() || !addCategory.trim() || !addQuantity) && { opacity: 0.5 }]}
-            onPress={handleAddItem}
+            onPress={() => handleAddItem(false)}
             disabled={!addName.trim() || !addCategory.trim() || !addQuantity || addLoading}
           >
             <Text style={styles.addButtonText}>תעמיס לי !</Text>
           </TouchableOpacity>
+          
+                   <Pressable
+            style={styles.addAnotherBtn}
+            onPress={() => {
+              handleAddItem(true);
+              setAddName('');
+              setAddQuantity('1');
+              setAddCategory('');
+              setShowNameSuggestions(false);
+              setShowCategorySuggestions(false);
+              setTimeout(() => {
+                nameInputRef.current?.focus();
+              }, 100);
+            }}
+          >
+            <Text style={styles.addAnotherBtnText}>הוסף עוד אחד</Text>
+          </Pressable>
         </KeyboardAvoidingView>
       </Modal>
       {/* Add animation overlay above modal */}
       {showAddAnim && (
         <View style={styles.addAnimOverlayNoBg} pointerEvents="none">
           <LottieView source={require('../../assets/refresh-animation.json')} autoPlay loop style={{ width: 450, height: 450 }} />
-        </View>
-      )}
-      {/* Snackbar only when modal is closed */}
-      {!modalVisible && snack && (
-        <View style={[styles.snack, { zIndex: 2000, elevation: 2000 }]} pointerEvents="none">
-          <Text style={styles.snackText}>{snack}</Text>
         </View>
       )}
     </SafeAreaView>
@@ -618,7 +734,8 @@ function ListItemRow({ item, onToggleDone, onDelete, onUpdateQuantity }: { item:
             duration: 200,
             useNativeDriver: true,
           }).start(() => {
-            setDismissed(true);
+            // Note: Optimistic update handles the immediate removal in ShoppingListPage.
+            // We just need to trigger the delete action.
             onDelete(item.id);
           });
         } else if (gestureState.dx > 120) {
@@ -643,9 +760,10 @@ function ListItemRow({ item, onToggleDone, onDelete, onUpdateQuantity }: { item:
     })
   ).current;
 
-  const { flashItemId, flashOn } = React.useContext(FlashContext);
-
-  if (dismissed) return null;
+  // The item is visually removed from the list when the parent state updates 
+  // (via optimistic delete in ShoppingListPage), so no local 'dismissed' state is strictly needed 
+  // unless we want a specific local animation before parent re-renders.
+  // For now, let's rely on the parent's items state change.
 
   return (
     <View style={{ position: 'relative', justifyContent: 'center', alignItems: 'stretch' }}>
@@ -689,11 +807,10 @@ function ListItemRow({ item, onToggleDone, onDelete, onUpdateQuantity }: { item:
         <Text style={{ color: '#506c4fff', fontWeight: 'bold', fontSize: 16 }}>מחק פריט</Text>
       </Animated.View>
       {/* Foreground card */}
-      <Animated.View
+            <Animated.View
         style={[
           styles.listItemRow,
           item.done && styles.listItemDone,
-          flashItemId === item.id && styles.flashHighlight,
           { transform: [{ translateX }], backgroundColor: bgColor, zIndex: 2 },
         ]}
         {...panResponder.panHandlers}
@@ -732,57 +849,19 @@ function ListItemRow({ item, onToggleDone, onDelete, onUpdateQuantity }: { item:
 
 // ---------- Component: Animated List Item Row ----------
 function AnimatedListItemRow({ item, onToggleDone, onDelete, onUpdateQuantity, index, visible }: { item: ListItem, onToggleDone: (itemId: string, doneStatus: boolean) => void, onDelete: (itemId: string) => void, onUpdateQuantity: (itemId: string, quantity: number) => void, index: number, visible: boolean }) {
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(20)).current;
-  const [shouldRender, setShouldRender] = useState(visible);
-
-  useEffect(() => {
-    if (visible) {
-      setShouldRender(true);
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 350,
-          delay: index * 80,
-          useNativeDriver: true,
-        }),
-        Animated.timing(translateY, {
-          toValue: 0,
-          duration: 350,
-          delay: index * 80,
-          useNativeDriver: true,
-        })
-      ]).start();
-    } else {
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 0,
-          duration: 250,
-          useNativeDriver: true,
-        }),
-        Animated.timing(translateY, {
-          toValue: 20,
-          duration: 250,
-          useNativeDriver: true,
-        })
-      ]).start(() => setShouldRender(false));
-    }
-  }, [visible]);
-
-  if (!shouldRender) return null;
+  // Use a simple local state to control the mounting/unmounting based on visibility
+  // The 'items' array update will not cause the list to unmount/remount now, 
+  // so we can rely on the 'visible' prop being set by the SectionList logic.
+  
+  if (!visible) return null;
 
   return (
-    <Animated.View style={{
-      opacity: fadeAnim,
-      transform: [{ translateY }],
-    }}>
-      <ListItemRow
-        item={item}
-        onToggleDone={onToggleDone}
-        onDelete={onDelete}
-        onUpdateQuantity={onUpdateQuantity}
-      />
-    </Animated.View>
+    <ListItemRow
+      item={item}
+      onToggleDone={onToggleDone}
+      onDelete={onDelete}
+      onUpdateQuantity={onUpdateQuantity}
+    />
   );
 }
 
@@ -833,7 +912,6 @@ const styles = StyleSheet.create({
   },
   quantityContainer: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
   itemQuantity: { fontSize: 18, fontWeight: '600', color: '#333', minWidth: 20, textAlign: 'center' },
-  snack: { position: "absolute", bottom: 24, alignSelf: "center", backgroundColor: "rgba(0,0,0,0.8)", paddingHorizontal: 16, paddingVertical: 12, borderRadius: 999, zIndex: 100 },
   snackText: { color: '#fff' },
   fab: {
     position: 'absolute',
@@ -893,15 +971,15 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   suggestionList: {
-    backgroundColor: '#e2c96b',
+    backgroundColor: '#506c4fff',
     borderRadius: 10,
     marginBottom: 10,
     paddingVertical: 4,
     paddingHorizontal: 8,
     elevation: 3,
     borderWidth: 1,
-    borderColor: '#e2c96b',
-    shadowColor: '#e2c96b',
+    borderColor: '#506c4fff',
+    shadowColor: '#506c4fff',
     shadowOpacity: 0.18,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 },
@@ -925,12 +1003,12 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#f3e6b3',
+    borderBottomColor: '#506c4fff',
     backgroundColor: '#fffdefff',
   },
   suggestionText: {
     fontSize: 16,
-    color: '#b08a00',
+    color: '#506c4fff',
     textAlign: 'right',
     fontWeight: '600',
     maxWidth: '98%',
@@ -969,17 +1047,87 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     zIndex: 1000,
   },
+  // Base style for message snackbars in the modal
   modalMessage: {
-    backgroundColor: 'rgba(238, 83, 63, 0.95)',
     borderRadius: 8,
     padding: 10,
     marginBottom: 10,
     alignItems: 'center',
   },
-  flashHighlight: {
-    backgroundColor: '#ffe066',
+  // Base style for message snackbars in the header
+  headerMessage: {
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 10,
+    alignItems: 'center',
   },
+  // Color specific styles
+  snackErrorBg: {
+    backgroundColor: 'rgba(238, 83, 63, 0.95)', // Red/Error
+  },
+  snackSuccessBg: {
+    backgroundColor: '#506c4fff', // Green/Success
+  },
+  toggleAllBtn: {
+    alignSelf: 'flex-end',
+    backgroundColor: '#506c4fff',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginTop: 14,
+  },
+  toggleAllText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  // State for tracking which categories are currently deleting
+  deletingCategories: {
+    alignSelf: 'flex-end',
+    backgroundColor: '#B91C1C',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginRight: 8,
+    marginTop: 8,
+    marginBottom: 12,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 6,
+  },
+  deleteAllBtnText: {
+    color: '#000',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  
+  deleteAllBtn: {
+    alignSelf: 'flex-end',
+    backgroundColor: '#f0ecd8fff0ecd8ff',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginRight: 8,
+    marginTop: 2,
+    marginBottom: 2,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 6,
+  },
+      addAnotherBtn: {
+      marginTop: 8,
+      paddingVertical: 8,
+      paddingHorizontal: 16,
+      borderRadius: 8,
+      backgroundColor: '#fffdefff',
+      alignItems: 'center',
+      marginBottom: 0,
+    },
+    addAnotherBtnText: {
+      color: '#506c4fff',
+      fontWeight: '600',
+      fontSize: 13,
+    },
+
 });
 
-// Flash context to pass flash state to ListItemRow
-const FlashContext = React.createContext<{ flashItemId: string | null, flashOn: boolean }>({ flashItemId: null, flashOn: false });
