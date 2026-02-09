@@ -10,8 +10,7 @@ services:
       - "8127:8081"
     environment:
       - NODE_ENV=development
-      # השארתי את המשתנה הזה למקרה שהקוד שלך משתמש בו לניתוב
-      - REACT_NATIVE_PACKAGER_HOSTNAME=localhost
+      - REACT_NATIVE_PACKAGER_HOSTNAME=192.168.0.197
     volumes:
       - .:/app
       - /app/node_modules 
