@@ -566,7 +566,7 @@ export default function ShoppingListPage() {
         onPress={() => setModalVisible(true)}
         activeOpacity={0.8}
       >
-        <LottieView source={require('../../assets/cart-add.json')} autoPlay loop style={Platform.OS === 'web' ? { width: 48, height: 48 } : { width: '100%', height: '100%' }} />
+        <LottieView source={require('../../assets/cart-add.json')} autoPlay={Platform.OS !== 'web'} loop={Platform.OS !== 'web'} style={Platform.OS === 'web' ? { width: 48, height: 48 } : { width: '100%', height: '100%' }} />
       </TouchableOpacity>
       {/* Modal */} 
       <Modal
