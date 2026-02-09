@@ -1,38 +1,37 @@
 # Stage 1: Build
-FROM node:18-alpine AS builder
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-# Clone the frontend repository
+# התקנת git וביצוע clone
 RUN apk add --no-cache git && \
     git clone https://github.com/n0S3curity/zenlist-mobile-app-reactNative.git .
 
-# Install dependencies
-RUN npm install
-
-# Install Expo CLI globally
-RUN npm install -g expo-cli
+# שימוש ב-legacy-peer-deps כדי לפתור את הקונפליקט בין React 19 ל-Lottie
+RUN npm install --legacy-peer-deps
 
 # Stage 2: Runtime
-FROM node:18-alpine
+FROM node:22-alpine
 
 WORKDIR /app
 
-# Install Expo CLI globally
-RUN npm install -g expo-cli
+# התקנת חבילות מערכת נחוצות להרצת Expo על לינוקס (במידה וצריך)
+RUN apk add --no-cache bash
 
-# Copy from builder
+# העתקת כל תיקיית האפליקציה (כולל node_modules) מהבילדר
 COPY --from=builder /app /app
 
-# Expose ports
-# 8081 - Expo development server
-# 19000 - Expo Metro bundler
-# 19001 - Expo dev client
-EXPOSE 8081 19000 19001
+# התקנת expo-cli ב-Runtime (רק אם הוא באמת נחוץ כפקודה גלובלית)
+RUN npm install -g expo-cli
 
-# Set environment variables
+# חשיפת פורטים (הוספתי גם את 19002 ל-Dashboard הישן אם רלוונטי)
+EXPOSE 8081 19000 19001 19002
+
+# הגדרות סביבה
 ENV EXPO_DEBUG=true
 ENV NODE_ENV=development
+# עוזר ל-Expo לעבוד בתוך Docker
+ENV EXPO_DEVTOOLS_LISTEN_ADDRESS=0.0.0.0
 
-# Start the Expo development server
-CMD ["expo", "start", "--web"]
+# הרצה במצב LAN כדי שהטלפון שלך יוכל להתחבר לרסברי פאי בקלות
+CMD ["npx", "expo", "start", "--lan", "--web"]
