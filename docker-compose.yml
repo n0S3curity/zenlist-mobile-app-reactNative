@@ -8,11 +8,9 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8127:8081"
-      - "19000:19000"
-      - "19001:19001"
     environment:
-      - EXPO_DEBUG=true
       - NODE_ENV=development
+      # השארתי את המשתנה הזה למקרה שהקוד שלך משתמש בו לניתוב
       - REACT_NATIVE_PACKAGER_HOSTNAME=localhost
     volumes:
       - .:/app
@@ -21,8 +19,9 @@ services:
       - zenlist-network
     stdin_open: true
     tty: true
-    command: expo start --web --listen 0.0.0.0
+    # הפקודה המעודכנת ללא הדגלים שגרמו לקריסה
+    command: npx expo start --web
 
 networks:
   zenlist-network:
-    driver: bridge
+    external: true # מגדיר לדוקר להשתמש ברשת הקיימת שה-backend יצר
