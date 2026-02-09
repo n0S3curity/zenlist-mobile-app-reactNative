@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  frontend:
+    container_name: zenlist-frontend
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8127:8081"
+      - "19000:19000"
+      - "19001:19001"
+    environment:
+      - EXPO_DEBUG=true
+      - NODE_ENV=development
+      - REACT_NATIVE_PACKAGER_HOSTNAME=localhost
+    volumes:
+      - .:/app
+      - /app/node_modules 
+    networks:
+      - zenlist-network
+    stdin_open: true
+    tty: true
+    command: expo start --web --listen 0.0.0.0
+
+networks:
+  zenlist-network:
+    driver: bridge
