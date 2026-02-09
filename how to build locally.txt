@@ -1,0 +1,58 @@
+
+
+
+
+
+
+
+
+npx expo prebuild --clean
+
+# 1. Ensure you are in the project root
+cd C:\ZenList\frontend
+
+# 2. Run the Gradle debug assembly (from the native directory)
+cd android
+./gradlew assembleDebug
+
+
+OUTPUT LOCATION:
+
+The APK file will be found here:
+C:\ZenList\frontend\android\app\build\outputs\apk\debug\app-debug.apk
+
+
+
+
+
+2. PRODUCTION BUILD (Standalone / Release)
+npx expo prebuild --clean
+
+# 1. Ensure you are in the project root
+cd C:\ZenList\frontend
+
+# 2. Export and bundle the production JavaScript and assets
+npx expo export --output-dir dist
+
+Once the export is complete, run the release assembly.
+
+# 3. Switch to the native directory
+cd android
+
+# 4. Run the Gradle release assembly
+./gradlew assembleRelease
+
+
+OUTPUT LOCATION:
+
+The production APK file will be found here:
+C:\ZenList\frontend\android\app\build\outputs\apk\release\app-release-unsigned.apk
+
+Note: This file is "unsigned" (using a temporary key) and must be properly signed with your own release keystore before uploading to the Google Play Store.
+
+
+
+
+
+
+

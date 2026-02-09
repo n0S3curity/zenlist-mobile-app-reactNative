@@ -15,7 +15,8 @@ import {
   KeyboardAvoidingView
 } from 'react-native';
 import { Ionicons } from "@expo/vector-icons";
-import LottieView from 'lottie-react-native';
+import LottieView from '@/components/WebLottie';
+import { Platform } from 'react-native';
 
 // Types
 type Store = {

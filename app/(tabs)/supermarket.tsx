@@ -19,8 +19,8 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 
 // Force right-to-left layout for Hebrew
-I18nManager.forceRTL(true);
-I18nManager.allowRTL(true);
+I18nManager.forceRTL(false);
+I18nManager.allowRTL(false);
 
 // ---------- Types ----------
 type SupermarketItem = {

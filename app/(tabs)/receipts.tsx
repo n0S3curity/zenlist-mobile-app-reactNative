@@ -15,6 +15,7 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
+  I18nManager,
   PermissionsAndroid,
 } from "react-native";
 import Constants from "expo-constants";
@@ -25,6 +26,11 @@ import { Ionicons } from "@expo/vector-icons";
 import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import LottieView from "lottie-react-native";
+
+I18nManager.forceRTL(false);
+I18nManager.allowRTL(false);
+
+
 
 // ---- Types ---------------------------------------------------------------
 type Receipt = {
@@ -346,12 +352,14 @@ export default function ReceiptsPage() {
         <View style={styles.header}>
           <View style={styles.titleContainer}>
             <Text style={styles.title}>קבלות</Text>
-            <LottieView
-              source={require("../../assets/receipts-navbar-animation.json")}
-              autoPlay
-              loop
-              style={{ width: 60, height: 60, marginBottom: 0 }}
-            />
+            {Platform.OS !== 'web' && (
+              <LottieView
+                source={require("../../assets/receipts-navbar-animation.json")}
+                autoPlay
+                loop
+                style={{ width: 60, height: 60, marginBottom: 0 }}
+              />
+            )}
           </View>
         </View>
         <View style={styles.center}>
@@ -374,12 +382,14 @@ export default function ReceiptsPage() {
         <View style={styles.header}>
           <View style={styles.titleContainer}>
             <Text style={styles.title}>קבלות</Text>
-            <LottieView
-              source={require("../../assets/receipts-navbar-animation.json")}
-              autoPlay
-              loop
-              style={{ width: 60, height: 60, marginBottom: 0 }}
-            />
+            {Platform.OS !== 'web' && (
+              <LottieView
+                source={require("../../assets/receipts-navbar-animation.json")}
+                autoPlay
+                loop
+                style={{ width: 60, height: 60, marginBottom: 0 }}
+              />
+            )}
           </View>
         </View>
         <View style={styles.center}>
@@ -402,12 +412,14 @@ export default function ReceiptsPage() {
       <View style={styles.header}>
         <View style={styles.titleContainer}>
           <Text style={styles.title}>קבלות</Text>
-          <LottieView
-            source={require("../../assets/receipts-navbar-animation.json")}
-            autoPlay
-            loop
-            style={{ width: 60, height: 60, marginBottom: 0 }}
-          />
+          {Platform.OS !== 'web' && (
+            <LottieView
+              source={require("../../assets/receipts-navbar-animation.json")}
+              autoPlay
+              loop
+              style={{ width: 60, height: 60, marginBottom: 0 }}
+            />
+          )}
         </View>
       </View>
 
@@ -649,13 +661,15 @@ function ReceiptRow({
         </View>
         <Text style={styles.amount}>{nis.format(item.total)}</Text>
         <Pressable onPress={handleDownload} style={[styles.downloadButton, { marginLeft: 1 }]}>
-          <LottieView
-            source={require("../../assets/download.json")}
-            autoPlay
-            loop
-            speed={1.4}
-            style={{ width: 42, height: 42 }}
-          />
+          {Platform.OS !== 'web' && (
+            <LottieView
+              source={require("../../assets/download.json")}
+              autoPlay
+              loop
+              speed={1.4}
+              style={{ width: 42, height: 42 }}
+            />
+          )}
         </Pressable>
       </View>
 

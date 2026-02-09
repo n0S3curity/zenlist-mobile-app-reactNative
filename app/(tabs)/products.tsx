@@ -103,12 +103,14 @@ export default function ProductsPage() {
         <View style={styles.header}>
           <View style={styles.titleContainer}>
             <Text style={styles.title}>מוצרים</Text>
-            <LottieView
-                                  source={require('../../assets/BarcodeScanner.json')}
-                                  autoPlay
-                                  loop
-                                  style={{ width: 32, height: 32 }}
-                                />
+            {Platform.OS !== 'web' && (
+              <LottieView
+                source={require('../../assets/BarcodeScanner.json')}
+                autoPlay
+                loop
+                style={{ width: 32, height: 32 }}
+              />
+            )}
           </View>
           <TextInput
             value={query}
@@ -166,12 +168,14 @@ export default function ProductsPage() {
       <View style={styles.header}>
         <View style={styles.titleContainer}>
           <Text style={styles.title}>מוצרים</Text>
-           <LottieView
-                                  source={require('../../assets/BarcodeScanner.json')}
-                                  autoPlay
-                                  loop
-                                  style={{ width: 36, height: 36 }}
-                                />
+          {Platform.OS !== 'web' && (
+            <LottieView
+              source={require('../../assets/BarcodeScanner.json')}
+              autoPlay
+              loop
+              style={{ width: 36, height: 36 }}
+            />
+          )}
         </View>
         <TextInput
           value={query}

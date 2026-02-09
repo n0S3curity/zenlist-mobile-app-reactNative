@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, I18nManager } from 'react-native';
-import LottieView from 'lottie-react-native';
+import LottieView from '@/components/WebLottie';
+import { Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 
 // Enable RTL for Hebrew
@@ -13,7 +14,7 @@ export default function AnimatedSplashScreen() {
   return (
     <View style={styles.container}>
       <LottieView
-        style={styles.animation}
+        style={Platform.OS === 'web' ? { width: 220, height: 220 } : styles.animation}
         source={require('../assets/cart-animation.json')} // Your animation file
         autoPlay
         loop={false}

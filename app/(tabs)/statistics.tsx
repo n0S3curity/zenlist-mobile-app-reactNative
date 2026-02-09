@@ -1,8 +1,16 @@
 import React, {useEffect, useState, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, FlatList, Dimensions, RefreshControl, TouchableOpacity, Modal } from 'react-native';
-import LottieView from 'lottie-react-native';
+import LottieView from '@/components/WebLottie';
+import { Platform } from 'react-native';
 import Svg, { Polyline, Line, Text as SvgText } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
+import { I18nManager } from 'react-native';
+
+
+I18nManager.forceRTL(false);
+I18nManager.allowRTL(false);
+
+
 
 const { width: screenWidth } = Dimensions.get('window');
 const nis = new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS' });
@@ -159,11 +167,11 @@ export default function StatisticsPage() {
       <View style={styles.screen}>
         <View style={styles.center}>
           <LottieView
-            source={require('../../assets/raise-animation.json')}
+            source={require("../../assets/raise-animation.json")}
             autoPlay
-            speed={1.3}
             loop={true}
-            style={{ width: 300, height: 300 }}
+            style={Platform.OS === 'web' ? { width: 140, height: 140 } : { width: 300, height: 300 }}
+          />
           />
           <Text style={styles.loadingText}>טוען נתונים…</Text>
         </View>
@@ -195,12 +203,14 @@ export default function StatisticsPage() {
         <View style={[styles.titleContainer, { alignItems: 'center', gap: 8 }]}> 
           <Text style={styles.title}>סטטיסטיקה</Text>
           <View style={{ justifyContent: 'center', alignItems: 'center', height: 48 }}>
-            <LottieView
-              source={require('../../assets/statistics-animation.json')}
-              autoPlay
-              loop
-              style={{ width: 100, height: 56, marginLeft: 0, marginTop: 90 }}
-            />
+            {Platform.OS !== 'web' && (
+              <LottieView
+                source={require('../../assets/statistics-animation.json')}
+                autoPlay
+                loop
+                style={{ width: 100, height: 56, marginLeft: 0, marginTop: 90 }}
+              />
+            )}
           </View>
         </View>
       </View>

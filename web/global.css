@@ -1,0 +1,39 @@
+/* Global web overrides to prevent runaway icon/image growth inside the phone frame */
+
+html, body, #root {
+  height: 100%;
+}
+
+/* Ensure the app container stays fixed-size when rendered by Metro dev server */
+#root {
+  width: 390px !important;
+  height: 844px !important;
+  max-width: 390px !important;
+  max-height: 844px !important;
+  overflow: hidden !important;
+}
+
+/* Cap large images, SVGs and Lottie containers used in the UI */
+#root img,
+#root svg,
+#root .lottie,
+#root .cart-icon,
+#root .fab-icon,
+#root i,
+#root .icon {
+  max-width: 180px !important;
+  max-height: 180px !important;
+  width: auto !important;
+  height: auto !important;
+  transform: none !important;
+}
+
+/* Prevent icons from inheriting large font-sizes from global styles */
+#root * {
+  font-size: inherit !important;
+}
+
+/* Defensive: ensure scrollbars are inside the phone frame */
+#root ::-webkit-scrollbar {
+  width: 10px;
+}

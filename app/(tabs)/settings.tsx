@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import Modal from 'react-native-modal';
 import { Ionicons } from "@expo/vector-icons";
-import LottieView from 'lottie-react-native';
+import LottieView from '@/components/WebLottie';
 
 // Types
 type Store = {
@@ -307,7 +307,7 @@ export default function SettingsPage() {
           <View style={styles.modalHandle} />
           <View style={{ flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', marginBottom: 18 }}>
             <Text style={styles.modalTitle}>אחרי מי לעקוב ?</Text>
-            <LottieView source={require('../../assets/cart-add.json')} autoPlay loop style={{ width: 48, height: 48, marginLeft: 8, marginRight: 5, marginTop: 0, marginBottom: 20 }} />
+            <LottieView source={require('../../assets/cart-add.json')} autoPlay loop style={Platform.OS === 'web' ? { width: 48, height: 48, marginLeft: 8, marginRight: 5, marginTop: 0, marginBottom: 20 } : { width: 48, height: 48, marginLeft: 8, marginRight: 5, marginTop: 0, marginBottom: 20 }} />
           </View>
           {permissionError ? (
             <View style={styles.modalMessage}><Text style={styles.snackbarText}>{permissionError}</Text></View>

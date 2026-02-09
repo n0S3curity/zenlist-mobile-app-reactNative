@@ -42,7 +42,8 @@
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/shopping-cart.png"
+      "favicon": "./assets/images/shopping-cart.png",
+      "entryPoint": "./web/index.js"
     },
 
     "plugins": [

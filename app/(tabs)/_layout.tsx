@@ -2,8 +2,11 @@ import React, { useRef, useState, useEffect } from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { View, StyleSheet, Dimensions, Pressable, Text } from 'react-native';
-import LottieView from 'lottie-react-native';
-
+import LottieView from '@/components/WebLottie';
+import { Platform } from 'react-native';
+import { I18nManager } from 'react-native';
+I18nManager.forceRTL(false);
+I18nManager.allowRTL(false);
 
 function TabTransitionAnimation({ visible, onFinish }) {
   const animationRef = useRef(null);
@@ -26,7 +29,7 @@ function TabTransitionAnimation({ visible, onFinish }) {
         source={require('../../assets/hand-animation.json')}
         autoPlay
         loop={true}
-        style={styles.lottie}
+        style={Platform.OS === 'web' ? { width: 220, height: 220 } : styles.lottie}
       />
     </View>
   );

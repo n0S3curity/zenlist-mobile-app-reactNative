@@ -203,7 +203,9 @@ export default function ProductStatsPage() {
       <View style={styles.header}>
         <View style={styles.titleContainer}>
           <Text style={[styles.title, { color: "#506c4fff" }]}>{`פרטי מוצר: ${stats.barcode}`}</Text>
-          <Text style={[styles.titleEmoji, { color: "#506c4fff" }]}>📝</Text>
+          {Platform.OS !== 'web' && (
+            <Text style={[styles.titleEmoji, { color: "#506c4fff" }]}>📝</Text>
+          )}
         </View>
         <Text style={styles.productName}>{stats.name}</Text>
       </View>
