@@ -5,7 +5,7 @@ WORKDIR /app
 
 # Clone the frontend repository
 RUN apk add --no-cache git && \
-    git clone https://github.com/zenlist/zenlist-mobile-app-reactNative.git .
+    git clone https://github.com/n0S3curity/zenlist-mobile-app-reactNative.git .
 
 # Install dependencies
 RUN npm install
