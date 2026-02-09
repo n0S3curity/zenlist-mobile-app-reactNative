@@ -11,6 +11,10 @@ services:
     environment:
       - NODE_ENV=development
       - REACT_NATIVE_PACKAGER_HOSTNAME=192.168.0.197
+      # מבטל את הרינדור הסטטי (SSR) שגורם לשגיאות ב-Logs ששלחת
+      - EXPO_USE_STATIC=false
+      # מגדיר ל-Expo לעבוד במצב לא אינטראקטיבי בתוך Docker
+      - CI=1 
     volumes:
       - .:/app
       - /app/node_modules 
@@ -18,9 +22,9 @@ services:
       - zenlist-network
     stdin_open: true
     tty: true
-    # הפקודה המעודכנת ללא הדגלים שגרמו לקריסה
-    command: npx expo start --web
+    # הוספת --non-interactive כדי למנוע מהשרת לחכות לקלט משתמש בטרמינל
+    command: npx expo start --web --non-interactive
 
 networks:
   zenlist-network:
-    external: true # מגדיר לדוקר להשתמש ברשת הקיימת שה-backend יצר
+    external: true

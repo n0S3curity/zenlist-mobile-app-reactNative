@@ -7,15 +7,12 @@
     "icon": "./assets/images/shopping-cart.png",
     "scheme": "zenlistmobileapp",
     "userInterfaceStyle": "automatic",
-
     "newArchEnabled": false,
-
     "splash": {
       "image": "./assets/images/shopping-cart.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.zenlist",
@@ -23,7 +20,6 @@
         "ITSAppUsesNonExemptEncryption": false
       }
     },
-
     "android": {
       "package": "com.zenlist",
       "edgeToEdgeEnabled": true,
@@ -36,24 +32,18 @@
         "READ_SMS",
         "RECEIVE_SMS"
       ]
-     
     },
-
     "web": {
       "bundler": "metro",
-      "output": "static",
-      "favicon": "./assets/images/shopping-cart.png",
-      "entryPoint": "./web/index.js"
+      "output": "single",
+      "favicon": "./assets/images/shopping-cart.png"
     },
-
     "plugins": [
       "expo-router"
     ],
-
     "experiments": {
       "typedRoutes": true
     },
-
     "extra": {
       "router": {},
       "eas": {
