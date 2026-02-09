@@ -398,7 +398,7 @@ export default function ShoppingListPage() {
     <View style={styles.header}>
       <View style={styles.titleContainer}>
         <Text style={styles.title}>רשימת קניות</Text>
-        {Platform.OS !== 'web' && (
+        {!Platform.select({ web: true, default: false }) && (
           <LottieView
             source={require('../../assets/cart-navbar-animation.json')}
             loop
@@ -566,7 +566,7 @@ export default function ShoppingListPage() {
         onPress={() => setModalVisible(true)}
         activeOpacity={0.8}
       >
-        <LottieView source={require('../../assets/cart-add.json')} autoPlay={Platform.OS !== 'web'} loop={Platform.OS !== 'web'} style={Platform.OS === 'web' ? { width: 48, height: 48 } : { width: '100%', height: '100%' }} />
+        <LottieView source={require('../../assets/cart-add.json')} autoPlay={!Platform.select({ web: true, default: false })} loop={!Platform.select({ web: true, default: false })} style={Platform.select({ web: { width: 48, height: 48 }, default: { width: '100%', height: '100%' } })} />
       </TouchableOpacity>
       {/* Modal */} 
       <Modal
@@ -582,7 +582,9 @@ export default function ShoppingListPage() {
           <View style={styles.modalHandle} />
           <View style={{ flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', marginBottom: 18 }}>
             <Text style={styles.modalTitle}>מה בא לך היום?</Text>
-            <LottieView source={require('../../assets/cart-add.json')} autoPlay={Platform.OS !== 'web'} loop={Platform.OS !== 'web'} style={Platform.OS === 'web' ? { width: 48, height: 48, marginLeft: 8, marginRight: 5, marginTop: 0, marginBottom: 22 } : { width: '15%', height: '120%', marginLeft: 8, marginRight: 5, marginTop: 0, marginBottom: 22 }} />
+            {!Platform.select({ web: true, default: false }) && (
+              <LottieView source={require('../../assets/cart-add.json')} autoPlay loop style={{ width: '15%', height: '120%', marginLeft: 8, marginRight: 5, marginTop: 0, marginBottom: 22 }} />
+            )}
           </View>
           {/* Message area inside modal (Now uses conditional styling based on snack type) */}
           {modalVisible && snack && (
@@ -692,9 +694,9 @@ export default function ShoppingListPage() {
         </KeyboardAvoidingView>
       </Modal>
       {/* Add animation overlay above modal */}
-      {showAddAnim && Platform.OS !== 'web' && (
+      {showAddAnim && !Platform.select({ web: true, default: false }) && (
         <View style={styles.addAnimOverlayNoBg} pointerEvents="none">
-          <LottieView source={require('../../assets/refresh-animation.json')} autoPlay loop style={Platform.OS === 'web' ? { width: 140, height: 140 } : { width: 450, height: 450 }} />
+          <LottieView source={require('../../assets/refresh-animation.json')} autoPlay loop style={Platform.select({ web: { width: 140, height: 140 }, default: { width: 450, height: 450 } })} />
         </View>
       )}
     </SafeAreaView>
