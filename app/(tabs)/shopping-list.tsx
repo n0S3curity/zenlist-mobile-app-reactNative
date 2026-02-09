@@ -582,7 +582,7 @@ export default function ShoppingListPage() {
           <View style={styles.modalHandle} />
           <View style={{ flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', marginBottom: 18 }}>
             <Text style={styles.modalTitle}>מה בא לך היום?</Text>
-            <LottieView source={require('../../assets/cart-add.json')} autoPlay loop style={Platform.OS === 'web' ? { width: 48, height: 48, marginLeft: 8, marginRight: 5, marginTop: 0, marginBottom: 22 } : { width: '15%', height: '120%', marginLeft: 8, marginRight: 5, marginTop: 0, marginBottom: 22 }} />
+            <LottieView source={require('../../assets/cart-add.json')} autoPlay={Platform.OS !== 'web'} loop={Platform.OS !== 'web'} style={Platform.OS === 'web' ? { width: 48, height: 48, marginLeft: 8, marginRight: 5, marginTop: 0, marginBottom: 22 } : { width: '15%', height: '120%', marginLeft: 8, marginRight: 5, marginTop: 0, marginBottom: 22 }} />
           </View>
           {/* Message area inside modal (Now uses conditional styling based on snack type) */}
           {modalVisible && snack && (
@@ -692,7 +692,7 @@ export default function ShoppingListPage() {
         </KeyboardAvoidingView>
       </Modal>
       {/* Add animation overlay above modal */}
-      {showAddAnim && (
+      {showAddAnim && Platform.OS !== 'web' && (
         <View style={styles.addAnimOverlayNoBg} pointerEvents="none">
           <LottieView source={require('../../assets/refresh-animation.json')} autoPlay loop style={Platform.OS === 'web' ? { width: 140, height: 140 } : { width: 450, height: 450 }} />
         </View>
